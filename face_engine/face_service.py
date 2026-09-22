@@ -293,6 +293,7 @@ def main():
     candidate_count = 0
     last_face_time = time.time()
     last_clothing_check_time = 0.0
+    last_embedding_reload_time = time.time()
     frame_interval = 1.0 / DETECTION_FPS
 
     print(f'\nFace recognition active (target ~{DETECTION_FPS} FPS)')
@@ -303,6 +304,12 @@ def main():
     try:
         while True:
             loop_start = time.time()
+
+            # Periodically reload embeddings and profiles so newly registered users are recognized immediately
+            if time.time() - last_embedding_reload_time > 10.0:
+                last_embedding_reload_time = time.time()
+                registered = load_registered_embeddings()
+                profiles = load_profiles()
 
             ret, frame = cap.read()
             if not ret:

@@ -5,17 +5,19 @@ Serves the mirror UI and JSON APIs for: status, weather, calendar,
 voice assistant, wardrobe management, and outfit recommendations.
 """
 
+import json
 import logging
 import os
+import re
 import time
 import uuid
 
-from flask import Flask, jsonify, render_template, request, send_from_directory
+from flask import Flask, jsonify, render_template, request, send_from_directory, Response
 
 from app.calendar import CalendarService
 from app.config.settings import settings
 from app.database.repositories import (
-    SettingsRepository, UserRepository, WardrobeRepository, OutfitLogRepository,
+    SettingsRepository, UserRepository, WardrobeRepository, OutfitLogRepository, ReminderRepository,
 )
 from app.recommendations import OutfitEngine, ClothingClassifier, MirrorStylist, GroomingClassifier
 from app.weather import WeatherService
@@ -23,6 +25,84 @@ from app.weather import WeatherService
 logger = logging.getLogger("reflectai.dashboard")
 
 WARDROBE_IMAGE_DIR = settings.DATA_DIR / "wardrobe"
+EMBEDDINGS_DIR = settings.DATA_DIR / "embeddings"
+PROFILES_FILE = settings.DATA_DIR / "profiles.json"
+FACE_MODELS_DIR = settings.PROJECT_ROOT / "face_engine" / "models"
+YUNET_MODEL = FACE_MODELS_DIR / "face_detection_yunet_2023mar.onnx"
+SFACE_MODEL = FACE_MODELS_DIR / "face_recognition_sface_2021dec.onnx"
+
+def _load_profiles_json():
+    if PROFILES_FILE.exists():
+        try:
+            with open(PROFILES_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+def _save_profiles_json(profiles):
+    PROFILES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(PROFILES_FILE, "w", encoding="utf-8") as f:
+        json.dump(profiles, f, indent=2)
+
+def _enroll_face(user_id: str, img_bytes: bytes) -> bool:
+    """
+    Detects face using YuNet and generates 128-D SFace embedding.
+    Saves:
+      - data/embeddings/<user_id>.npy
+      - data/embeddings/<user_id>.jpg (cropped face avatar)
+    """
+    import cv2
+    import numpy as np
+
+    EMBEDDINGS_DIR.mkdir(parents=True, exist_ok=True)
+    nparr = np.frombuffer(img_bytes, np.uint8)
+    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    if img is None:
+        return False
+
+    if not YUNET_MODEL.exists() or not SFACE_MODEL.exists():
+        # Fallback: Save image as avatar even if face recognition models are not present
+        cv2.imwrite(str(EMBEDDINGS_DIR / f"{user_id}.jpg"), img)
+        return False
+
+    try:
+        h, w = img.shape[:2]
+        detector = cv2.FaceDetectorYN.create(
+            model=str(YUNET_MODEL),
+            config="",
+            input_size=(w, h),
+            score_threshold=0.6,
+            nms_threshold=0.3,
+            top_k=5000,
+        )
+        recognizer = cv2.FaceRecognizerSF.create(model=str(SFACE_MODEL), config="")
+
+        detector.setInputSize((w, h))
+        _, faces = detector.detect(img)
+
+        if faces is not None and len(faces) > 0:
+            faces_sorted = sorted(faces, key=lambda f: f[2] * f[3], reverse=True)
+            face = faces_sorted[0]
+            aligned = recognizer.alignCrop(img, face)
+            feat = recognizer.feature(aligned)
+            norm = np.linalg.norm(feat)
+            if norm > 0:
+                feat = feat / norm
+            np.save(str(EMBEDDINGS_DIR / f"{user_id}.npy"), feat)
+            cv2.imwrite(str(EMBEDDINGS_DIR / f"{user_id}.jpg"), aligned)
+            return True
+        else:
+            # No face detected in frame; still save as avatar
+            cv2.imwrite(str(EMBEDDINGS_DIR / f"{user_id}.jpg"), img)
+            return False
+    except Exception as e:
+        logger.error(f"Error enrolling face for {user_id}: {e}")
+        try:
+            cv2.imwrite(str(EMBEDDINGS_DIR / f"{user_id}.jpg"), img)
+        except Exception:
+            pass
+        return False
 
 _live_stylist_state = {}
 _live_grooming_state = {}
@@ -59,6 +139,7 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/app")
 @app.route("/wardrobe")
 def wardrobe_page():
     return render_template("wardrobe.html")
@@ -432,6 +513,195 @@ def api_mirror_grooming_status():
 @app.route("/wardrobe-images/<user_id>/<filename>")
 def wardrobe_image(user_id, filename):
     return send_from_directory(str(WARDROBE_IMAGE_DIR / user_id), filename)
+
+
+# ── User Profile & Facial Enrollment API ─────────────────────
+
+@app.route("/api/users")
+def api_users_list():
+    active_user_id = SettingsRepository.get("active_user", default="guest")
+    all_users = UserRepository.list_all()
+    user_list = []
+    for u in all_users:
+        uid = u["id"]
+        has_face = (EMBEDDINGS_DIR / f"{uid}.npy").exists()
+        has_avatar = (EMBEDDINGS_DIR / f"{uid}.jpg").exists()
+        items = WardrobeRepository.list_for_user(uid)
+        user_list.append({
+            "id": uid,
+            "name": u["name"],
+            "preferred_style": u.get("preferred_style") or "Casual",
+            "hair_preference": u.get("hair_preference") or "Natural",
+            "temperature_unit": u.get("temperature_unit") or "C",
+            "avatar_url": f"/avatar/{uid}",
+            "has_face": has_face,
+            "has_avatar": has_avatar,
+            "wardrobe_count": len(items),
+            "is_active": (uid == active_user_id),
+        })
+    return jsonify({"active_user": active_user_id, "users": user_list})
+
+
+@app.route("/api/user/register", methods=["POST"])
+def api_user_register():
+    name = request.form.get("name", "").strip()
+    if not name:
+        return jsonify({"error": "Name is required"}), 400
+
+    preferred_style = request.form.get("preferred_style", "Casual").strip()
+    hair_preference = request.form.get("hair_preference", "Natural").strip()
+    switch_now = request.form.get("switch_now", "true").lower() in ("true", "1", "yes")
+
+    # Clean ID: alphanumeric + underscore
+    user_id = re.sub(r'[^a-z0-9_]', '', name.lower().replace(" ", "_"))
+    if not user_id:
+        user_id = f"user_{uuid.uuid4().hex[:6]}"
+
+    # Save to SQLite
+    UserRepository.create_or_update(
+        user_id=user_id,
+        name=name,
+        preferred_style=preferred_style,
+        hair_preference=hair_preference,
+    )
+
+    # Face enrollment if photo uploaded
+    photo_file = request.files.get("photo")
+    has_face = False
+    if photo_file and photo_file.filename:
+        photo_bytes = photo_file.read()
+        has_face = _enroll_face(user_id, photo_bytes)
+
+    # Update profiles.json
+    profiles = _load_profiles_json()
+    profiles[user_id] = {
+        "id": user_id,
+        "name": name.upper(),
+        "greeting_name": name.upper(),
+        "outfit": ["Black T-Shirt", "Blue Jeans", "White Sneakers"],
+        "hair": hair_preference,
+        "calendar": [
+            "10:30 AM · Project Review",
+            "04:00 PM · Gym & Workout",
+        ],
+        "news": [
+            "Tech updates & innovations",
+            "Local weather outlook",
+        ],
+    }
+    _save_profiles_json(profiles)
+
+    if switch_now:
+        SettingsRepository.set("active_user", user_id)
+        logger.info(f"Active user switched to newly registered user: {user_id}")
+
+    return jsonify({
+        "status": "ok",
+        "user_id": user_id,
+        "name": name,
+        "has_face": has_face,
+        "active": switch_now,
+        "message": f"User '{name}' registered successfully!"
+    })
+
+
+@app.route("/api/user/delete/<user_id>", methods=["POST", "DELETE"])
+def api_user_delete(user_id):
+    if user_id.lower() == "guest":
+        return jsonify({"error": "Cannot delete default guest profile"}), 400
+
+    UserRepository.delete(user_id)
+
+    # Delete embeddings and avatar if present
+    for ext in (".npy", ".jpg"):
+        f = EMBEDDINGS_DIR / f"{user_id}{ext}"
+        if f.exists():
+            try:
+                f.unlink()
+            except Exception:
+                pass
+
+    # Delete wardrobe images directory
+    user_wardrobe_dir = WARDROBE_IMAGE_DIR / user_id
+    if user_wardrobe_dir.exists():
+        try:
+            import shutil
+            shutil.rmtree(user_wardrobe_dir, ignore_errors=True)
+        except Exception:
+            pass
+
+    # Remove from profiles.json
+    profiles = _load_profiles_json()
+    if user_id in profiles:
+        del profiles[user_id]
+        _save_profiles_json(profiles)
+
+    # If active user was deleted, switch to guest
+    current_active = SettingsRepository.get("active_user", default="guest")
+    if current_active == user_id:
+        SettingsRepository.set("active_user", "guest")
+
+    return jsonify({"status": "ok", "message": f"User {user_id} deleted"})
+
+
+@app.route("/avatar/<user_id>")
+def user_avatar(user_id):
+    avatar_file = EMBEDDINGS_DIR / f"{user_id}.jpg"
+    if avatar_file.exists():
+        return send_from_directory(str(EMBEDDINGS_DIR), f"{user_id}.jpg", mimetype="image/jpeg")
+
+    user = UserRepository.get(user_id)
+    initial = (user["name"][0] if user and user.get("name") else user_id[0]).upper()
+    svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
+      <defs>
+        <linearGradient id="g_{user_id}" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#e8b76d" />
+          <stop offset="100%" stop-color="#b45309" />
+        </linearGradient>
+      </defs>
+      <rect width="120" height="120" rx="60" fill="url(#g_{user_id})" />
+      <text x="50%" y="54%" font-family="system-ui, -apple-system, sans-serif" font-size="52" font-weight="600" fill="#0a0a0a" text-anchor="middle" dominant-baseline="middle">{initial}</text>
+    </svg>"""
+    return Response(svg, mimetype="image/svg+xml")
+
+
+# ── Mirror Remote Controls & Agenda API ───────────────────────
+
+@app.route("/api/mirror/privacy/toggle", methods=["POST"])
+def toggle_privacy():
+    current = SettingsRepository.get("privacy_mode", default="false") == "true"
+    new_val = "false" if current else "true"
+    SettingsRepository.set("privacy_mode", new_val)
+    logger.info(f"Privacy mode toggled from remote to: {new_val}")
+    return jsonify({"status": "ok", "privacy_mode": new_val == "true"})
+
+
+@app.route("/api/reminders", methods=["GET"])
+def api_reminders_list():
+    user_id = request.args.get("user_id") or SettingsRepository.get("active_user", default="guest")
+    reminders = ReminderRepository.list_for_user(user_id)
+    return jsonify({"user_id": user_id, "reminders": reminders})
+
+
+@app.route("/api/reminders", methods=["POST"])
+def api_reminders_add():
+    data = request.get_json(force=True, silent=True) or request.form or {}
+    user_id = data.get("user_id") or SettingsRepository.get("active_user", default="guest")
+    title = data.get("title", "").strip()
+    datetime_str = data.get("datetime", "").strip()
+    if not title:
+        return jsonify({"error": "title is required"}), 400
+    if not datetime_str:
+        import datetime
+        datetime_str = datetime.datetime.now().strftime("%I:%M %p")
+    ReminderRepository.create(user_id=user_id, title=title, datetime_str=datetime_str)
+    return jsonify({"status": "ok", "message": "Reminder added"})
+
+
+@app.route("/api/reminders/<int:reminder_id>", methods=["DELETE"])
+def api_reminders_delete(reminder_id):
+    ReminderRepository.delete(reminder_id)
+    return jsonify({"status": "ok"})
 
 
 def run_dashboard(host: str = "0.0.0.0", port: int = 5000, debug: bool = False) -> None:

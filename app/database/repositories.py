@@ -38,6 +38,11 @@ class UserRepository:
             rows = conn.execute("SELECT * FROM users").fetchall()
             return [dict(r) for r in rows]
 
+    @staticmethod
+    def delete(user_id: str):
+        with get_connection() as conn:
+            conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+
 
 class SettingsRepository:
     """Simple key-value store for system state, e.g. privacy mode."""

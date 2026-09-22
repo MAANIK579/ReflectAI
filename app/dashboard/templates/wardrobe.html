@@ -2,29 +2,39 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>ReflectAI — My Wardrobe</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>ReflectAI — Mobile Companion</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg: #0a0a0a;
-      --surface: #161616;
-      --surface-2: #1e1e1e;
-      --ink: #f0ede6;
-      --ink-dim: #8b8b85;
-      --ink-faint: #555550;
-      --ember: #e8b76d;
-      --ember-glow: rgba(232, 183, 109, 0.25);
-      --ok: #6fae7f;
-      --danger: #e85d5d;
-      --border: rgba(240,237,230,0.10);
-      --border-light: rgba(240,237,230,0.06);
-      --glass: rgba(22,22,22,0.85);
+      --bg: #09090b;
+      --surface: #141417;
+      --surface-2: #1e1e24;
+      --surface-3: #272730;
+      --glass: rgba(18, 18, 22, 0.88);
+      --glass-card: rgba(26, 26, 32, 0.7);
+      --ink: #f8fafc;
+      --ink-dim: #94a3b8;
+      --ink-faint: #64748b;
+      --ember: #f59e0b;
+      --ember-light: #fbbf24;
+      --ember-glow: rgba(245, 158, 11, 0.22);
+      --ember-gradient: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      --ok: #10b981;
+      --ok-glow: rgba(16, 185, 129, 0.2);
+      --info: #3b82f6;
+      --danger: #ef4444;
+      --danger-glow: rgba(239, 68, 68, 0.2);
+      --border: rgba(255, 255, 255, 0.08);
+      --border-light: rgba(255, 255, 255, 0.04);
+      --border-active: rgba(245, 158, 11, 0.4);
+      --radius-xl: 20px;
       --radius: 16px;
       --radius-sm: 12px;
       --radius-xs: 8px;
+      --safe-top: env(safe-area-inset-top, 0px);
       --safe-bottom: env(safe-area-inset-bottom, 0px);
     }
 
@@ -32,14 +42,14 @@
     html, body {
       background: var(--bg);
       color: var(--ink);
-      font-family: 'Inter', -apple-system, sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
       min-height: 100vh;
       min-height: 100dvh;
       overflow-x: hidden;
       -webkit-font-smoothing: antialiased;
     }
 
-    /* ── Page Container ── */
+    /* ── App Shell ── */
     .app {
       max-width: 480px;
       margin: 0 auto;
@@ -48,93 +58,429 @@
       display: flex;
       flex-direction: column;
       position: relative;
+      background: radial-gradient(circle at 50% 0%, rgba(245, 158, 11, 0.05) 0%, transparent 60%);
     }
 
     /* ── Views ── */
-    .view { display: none; flex-direction: column; flex: 1; }
+    .view {
+      display: none;
+      flex-direction: column;
+      flex: 1;
+      padding: 0 16px;
+      padding-top: calc(12px + var(--safe-top));
+      padding-bottom: calc(88px + var(--safe-bottom));
+      animation: fadeIn 0.2s ease-out;
+    }
     .view.active { display: flex; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
-    /* ── Header ── */
-    .header {
+    /* ── App Top Header ── */
+    .top-bar {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 16px 20px 12px;
+      padding: 12px 4px 16px;
       position: sticky;
       top: 0;
-      z-index: 10;
-      background: var(--bg);
+      z-index: 20;
+      background: linear-gradient(180deg, var(--bg) 80%, transparent);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
     }
-    .header-title {
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .brand-logo {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: var(--ember-gradient);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #000;
+      font-size: 0.95rem;
+      font-weight: 700;
+      box-shadow: 0 2px 10px var(--ember-glow);
+    }
+    .brand-title {
       font-family: 'Space Grotesk', sans-serif;
-      font-weight: 500;
-      font-size: 1.35rem;
-      letter-spacing: -0.01em;
+      font-size: 1.25rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
     }
-    .header-count {
-      font-size: 0.75rem;
-      color: var(--ink-dim);
+    .brand-title span { color: var(--ember); }
+
+    /* Active User Pill in Header */
+    .active-user-pill {
+      display: flex;
+      align-items: center;
+      gap: 7px;
       background: var(--surface);
-      padding: 4px 10px;
-      border-radius: 20px;
       border: 1px solid var(--border);
+      padding: 4px 10px 4px 6px;
+      border-radius: 20px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .active-user-pill:active { transform: scale(0.96); border-color: var(--ember); }
+    .active-user-avatar {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 1px solid var(--ember);
+    }
+    .active-user-name {
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: var(--ink);
+    }
+    .live-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--ok);
+      box-shadow: 0 0 6px var(--ok);
+    }
+
+    /* Section Subheadings */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 16px 0 10px;
+    }
+    .section-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 0.92rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      text-transform: uppercase;
+      color: var(--ink-dim);
+    }
+    .section-badge {
+      font-size: 0.72rem;
+      color: var(--ember);
+      background: var(--ember-glow);
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-weight: 500;
     }
 
     /* ═══════════════════════════════════════════════
-       VIEW 1: CAMERA (Scan Clothing)
+       TAB 1: CLOSET & OUTFIT RECOMMENDATION
        ═══════════════════════════════════════════════ */
 
-    .camera-view {
-      padding: 0 20px;
-      padding-bottom: calc(80px + var(--safe-bottom));
-      flex: 1;
+    /* Outfit Recommendation Hero Card */
+    .outfit-hero {
+      background: linear-gradient(135deg, rgba(30,30,38,0.95) 0%, rgba(20,20,26,0.95) 100%);
+      border: 1px solid var(--border-active);
+      border-radius: var(--radius-xl);
+      padding: 16px;
+      margin-bottom: 16px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+    .outfit-hero::before {
+      content: '';
+      position: absolute;
+      top: -30px;
+      right: -30px;
+      width: 100px;
+      height: 100px;
+      background: radial-gradient(circle, var(--ember-glow) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .outfit-top-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .outfit-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--ember-glow);
+      color: var(--ember);
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 3px 9px;
+      border-radius: 14px;
+      letter-spacing: 0.02em;
+    }
+    .outfit-weather-pill {
+      font-size: 0.75rem;
+      color: var(--ink-dim);
+      background: var(--surface-2);
+      padding: 3px 8px;
+      border-radius: 10px;
+      border: 1px solid var(--border-light);
+    }
+    .outfit-pieces-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .outfit-piece-card {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px 6px;
+      text-align: center;
       display: flex;
       flex-direction: column;
       align-items: center;
+      gap: 4px;
     }
-
-    .scan-hero {
-      flex: 1;
+    .piece-img {
+      width: 100%;
+      height: 58px;
+      object-fit: cover;
+      border-radius: 6px;
+      background: var(--bg);
+    }
+    .piece-icon-fallback {
+      width: 100%;
+      height: 58px;
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 24px;
-      width: 100%;
-      max-height: 480px;
+      font-size: 1.6rem;
+      background: var(--surface-3);
+      border-radius: 6px;
+    }
+    .piece-cat {
+      font-size: 0.65rem;
+      color: var(--ink-faint);
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    .piece-name {
+      font-size: 0.72rem;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+    .outfit-reason-box {
+      font-size: 0.78rem;
+      color: var(--ink-dim);
+      line-height: 1.4;
+      background: rgba(0,0,0,0.3);
+      padding: 8px 10px;
+      border-radius: var(--radius-xs);
+      border-left: 2px solid var(--ember);
+      display: flex;
+      align-items: flex-start;
+      gap: 6px;
     }
 
-    .scan-ring {
+    /* Category Filter Tabs */
+    .tabs-bar {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      padding: 4px 2px 14px;
+      margin-bottom: 2px;
+    }
+    .tabs-bar::-webkit-scrollbar { display: none; }
+    .cat-tab {
+      padding: 7px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      color: var(--ink-dim);
+      font-size: 0.78rem;
+      font-weight: 500;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .cat-tab.active {
+      background: var(--ember);
+      color: #000;
+      border-color: var(--ember);
+      font-weight: 600;
+      box-shadow: 0 2px 12px var(--ember-glow);
+    }
+
+    /* Closet Grid */
+    .wardrobe-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+    .wardrobe-card {
+      background: var(--surface);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius);
+      overflow: hidden;
       position: relative;
-      width: 200px;
-      height: 200px;
+      transition: transform 0.15s ease, border-color 0.2s;
+    }
+    .wardrobe-card:active { transform: scale(0.98); }
+    .card-photo-wrap {
+      width: 100%;
+      height: 145px;
+      position: relative;
+      background: var(--surface-2);
+    }
+    .card-photo {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .card-no-photo {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.6rem;
+      color: var(--ink-faint);
+    }
+    .card-del-btn {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 28px;
+      height: 28px;
       border-radius: 50%;
+      background: rgba(10,10,10,0.7);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: var(--danger);
+      font-size: 1rem;
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      transition: transform 0.2s ease;
+      transition: all 0.15s;
     }
-    .scan-ring:active { transform: scale(0.95); }
-    .scan-ring::before {
-      content: '';
+    .card-del-btn:active { transform: scale(0.9); background: var(--danger); color: #fff; }
+    .card-content {
+      padding: 10px 12px 12px;
+    }
+    .card-name {
+      font-size: 0.84rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .card-meta-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.72rem;
+      color: var(--ink-dim);
+    }
+    .card-color-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      text-transform: capitalize;
+    }
+    .color-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+    }
+    .card-weather-tag {
+      font-size: 0.68rem;
+      background: var(--surface-2);
+      padding: 1px 6px;
+      border-radius: 6px;
+      color: var(--ink-faint);
+    }
+
+    /* Empty State */
+    .empty-state {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 48px 16px;
+      color: var(--ink-dim);
+    }
+    .empty-state-icon { font-size: 3rem; margin-bottom: 12px; opacity: 0.7; }
+    .empty-state-title { font-family: 'Space Grotesk', sans-serif; font-size: 1.1rem; color: var(--ink); margin-bottom: 6px; }
+    .empty-state-p { font-size: 0.85rem; line-height: 1.4; margin-bottom: 16px; }
+    .btn-cta-scan {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--ember);
+      color: #000;
+      padding: 10px 20px;
+      border-radius: 20px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      border: none;
+      cursor: pointer;
+    }
+
+    /* ═══════════════════════════════════════════════
+       TAB 2: SCAN CLOTHING
+       ═══════════════════════════════════════════════ */
+
+    .scan-view-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      padding: 10px 0;
+    }
+    .scan-hero {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      width: 100%;
+      padding: 30px 10px;
+    }
+    .scan-target {
+      position: relative;
+      width: 200px;
+      height: 200px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .scan-target:active { transform: scale(0.96); }
+    .scan-ring-outer {
       position: absolute;
       inset: 0;
       border-radius: 50%;
-      border: 3px solid var(--ember);
-      opacity: 0.7;
+      border: 3px dashed var(--ember);
+      opacity: 0.6;
+      animation: rotateRing 20s linear infinite;
     }
-    .scan-ring::after {
-      content: '';
-      position: absolute;
-      inset: -8px;
-      border-radius: 50%;
-      border: 1px solid var(--ember);
-      opacity: 0.2;
+    @keyframes rotateRing { to { transform: rotate(360deg); } }
+    .scan-target.scanning .scan-ring-outer {
+      animation: pulseRing 1.2s ease-in-out infinite, rotateRing 6s linear infinite;
+      border-style: solid;
+      border-color: var(--ember);
     }
-    .scan-ring .ring-inner {
-      width: 170px;
-      height: 170px;
+    @keyframes pulseRing {
+      0%, 100% { opacity: 0.8; transform: scale(1); }
+      50% { opacity: 0.3; transform: scale(1.08); }
+    }
+    .scan-inner-circle {
+      width: 160px;
+      height: 160px;
       border-radius: 50%;
       background: var(--surface);
       border: 1px solid var(--border);
@@ -143,317 +489,628 @@
       align-items: center;
       justify-content: center;
       gap: 8px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.5);
     }
-    .scan-ring .ring-icon {
-      font-size: 2.8rem;
-      line-height: 1;
+    .scan-circle-icon { font-size: 2.8rem; }
+    .scan-circle-text { font-family: 'Space Grotesk', sans-serif; font-size: 0.95rem; font-weight: 600; color: var(--ember); }
+    .scan-spinner {
+      display: none;
+      width: 36px;
+      height: 36px;
+      border: 3px solid var(--border);
+      border-top-color: var(--ember);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
     }
-    .scan-ring .ring-label {
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 0.9rem;
-      color: var(--ember);
-      font-weight: 500;
-    }
+    .scan-target.scanning .scan-circle-icon,
+    .scan-target.scanning .scan-circle-text { display: none; }
+    .scan-target.scanning .scan-spinner { display: block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* Pulse animation when scanning */
-    .scan-ring.scanning::before {
-      animation: pulse-ring 1.5s ease-in-out infinite;
-    }
-    @keyframes pulse-ring {
-      0%, 100% { opacity: 0.7; inset: 0; }
-      50% { opacity: 0.3; inset: -12px; }
-    }
-
-    .scan-subtitle {
+    .scan-hints {
+      text-align: center;
       font-size: 0.85rem;
       color: var(--ink-dim);
-      text-align: center;
       line-height: 1.5;
     }
+    .scan-hints strong { color: var(--ink); }
 
-    .scan-file-input { display: none; }
-
-    /* ── AI Detection Result Card ── */
-    .detect-card {
+    /* Detection Result Card */
+    .detect-result-card {
       display: none;
       width: 100%;
       background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
+      border: 1px solid var(--border-active);
+      border-radius: var(--radius-xl);
       overflow: hidden;
-      margin-top: 8px;
       animation: slideUp 0.3s ease-out;
+      margin-top: 4px;
     }
-    .detect-card.visible { display: block; }
-
-    @keyframes slideUp {
-      from { opacity: 0; transform: translateY(20px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    .detect-preview {
+    .detect-result-card.visible { display: block; }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+    .detect-photo-preview {
       width: 100%;
-      height: 200px;
+      height: 190px;
       object-fit: cover;
       display: block;
-      background: var(--bg);
+      background: var(--surface-2);
     }
-    .detect-body { padding: 16px; }
-    .detect-ai-tag {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      background: var(--ember-glow);
-      color: var(--ember);
-      font-size: 0.75rem;
-      font-weight: 500;
-      padding: 4px 10px;
-      border-radius: 20px;
-      margin-bottom: 12px;
-    }
-    .detect-chips-label {
+    .detect-card-body { padding: 16px; }
+    .chips-label {
       font-size: 0.72rem;
       color: var(--ink-dim);
       text-transform: uppercase;
-      letter-spacing: 0.08em;
+      font-weight: 600;
+      letter-spacing: 0.04em;
       margin-bottom: 6px;
-      font-weight: 500;
     }
-    .detect-chips {
+    .chip-grid {
       display: grid;
       grid-template-columns: repeat(5, 1fr);
-      gap: 5px;
+      gap: 6px;
       margin-bottom: 14px;
     }
-    .chip-btn {
-      padding: 8px 2px;
+    .chip {
       background: var(--surface-2);
       border: 1px solid var(--border);
       border-radius: var(--radius-xs);
+      padding: 8px 2px;
       color: var(--ink);
       font-size: 0.72rem;
       font-weight: 500;
-      cursor: pointer;
       text-align: center;
-      transition: all 0.2s ease;
-      font-family: 'Inter', sans-serif;
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 3px;
+      cursor: pointer;
+      transition: all 0.15s;
     }
-    .chip-btn .chip-emoji { font-size: 1.25rem; line-height: 1; }
-    .chip-btn.active {
+    .chip.active {
       background: var(--ember);
-      color: #0a0a0a;
+      color: #000;
       border-color: var(--ember);
       font-weight: 600;
-      transform: translateY(-1px);
-      box-shadow: 0 4px 14px var(--ember-glow);
+      box-shadow: 0 2px 10px var(--ember-glow);
     }
-    .detect-fields {
+    .form-group {
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 4px;
+      margin-bottom: 10px;
     }
-    .detect-field label {
-      display: block;
-      font-size: 0.7rem;
+    .form-label {
+      font-size: 0.72rem;
       color: var(--ink-dim);
       text-transform: uppercase;
-      letter-spacing: 0.08em;
-      margin-bottom: 4px;
+      letter-spacing: 0.04em;
+      font-weight: 500;
     }
-    .detect-field input,
-    .detect-field select {
+    .form-input, .form-select {
       width: 100%;
       padding: 10px 12px;
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: var(--radius-xs);
       color: var(--ink);
+      font-family: inherit;
       font-size: 0.9rem;
-      font-family: 'Inter', sans-serif;
     }
-    .detect-field input:focus,
-    .detect-field select:focus {
+    .form-input:focus, .form-select:focus {
       outline: none;
       border-color: var(--ember);
     }
-
-    .detect-actions {
+    .form-actions-row {
       display: flex;
       gap: 10px;
-      margin-top: 16px;
+      margin-top: 14px;
     }
-    .btn-confirm {
+    .btn-submit {
       flex: 1;
-      padding: 13px;
+      padding: 12px;
       background: var(--ember);
-      color: #0a0a0a;
-      border: none;
-      border-radius: var(--radius-sm);
+      color: #000;
       font-family: 'Space Grotesk', sans-serif;
       font-size: 0.95rem;
       font-weight: 600;
+      border: none;
+      border-radius: var(--radius-sm);
       cursor: pointer;
       transition: opacity 0.15s;
     }
-    .btn-confirm:active { opacity: 0.8; }
-    .btn-confirm:disabled { opacity: 0.4; cursor: not-allowed; }
-    .btn-cancel {
-      padding: 13px 20px;
+    .btn-submit:active { opacity: 0.85; }
+    .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-ghost {
+      padding: 12px 18px;
       background: transparent;
       color: var(--ink-dim);
       border: 1px solid var(--border);
       border-radius: var(--radius-sm);
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 0.95rem;
+      font-family: inherit;
+      font-size: 0.9rem;
       cursor: pointer;
     }
-    .btn-cancel:active { background: var(--surface-2); }
-
-    /* Loading spinner overlay for scan button */
-    .scan-ring.scanning .ring-icon { display: none; }
-    .scan-ring.scanning .ring-label { display: none; }
-    .scan-ring.scanning .ring-spinner { display: block; }
-    .ring-spinner {
-      display: none;
-      width: 40px; height: 40px;
-      border: 3px solid var(--border);
-      border-top-color: var(--ember);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    .btn-ghost:active { background: var(--surface-2); }
 
     /* ═══════════════════════════════════════════════
-       VIEW 2: CLOSET (Your Items)
+       TAB 3: USERS & FACE ENROLLMENT
        ═══════════════════════════════════════════════ */
 
-    .closet-view {
-      padding: 0 16px;
-      padding-bottom: calc(80px + var(--safe-bottom));
-      flex: 1;
+    .active-profile-card {
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(20,20,26,0.9) 100%);
+      border: 1px solid var(--border-active);
+      border-radius: var(--radius-xl);
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+    .active-profile-avatar {
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid var(--ember);
+      box-shadow: 0 0 16px var(--ember-glow);
+    }
+    .active-profile-details { flex: 1; }
+    .active-badge-tag {
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--ok);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-bottom: 2px;
+    }
+    .active-profile-name {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 1.15rem;
+      font-weight: 600;
+    }
+    .active-profile-sub {
+      font-size: 0.75rem;
+      color: var(--ink-dim);
     }
 
-    /* Category Tabs */
-    .tabs {
+    /* User Profile Cards */
+    .user-list {
       display: flex;
-      gap: 8px;
-      padding: 0 4px 14px;
-      overflow-x: auto;
-      scrollbar-width: none;
+      flex-direction: column;
+      gap: 10px;
     }
-    .tabs::-webkit-scrollbar { display: none; }
-    .tab {
-      padding: 7px 16px;
+    .user-card {
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 24px;
-      color: var(--ink-dim);
-      font-size: 0.8rem;
-      cursor: pointer;
-      white-space: nowrap;
+      border-radius: var(--radius);
+      padding: 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
       transition: all 0.2s ease;
-      font-family: 'Inter', sans-serif;
     }
-    .tab.active {
-      background: var(--ember);
-      color: #0a0a0a;
+    .user-card.current {
       border-color: var(--ember);
+      background: var(--surface-2);
+    }
+    .user-card-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 1px solid var(--border);
+    }
+    .user-card-info { flex: 1; min-width: 0; }
+    .user-card-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 3px;
+    }
+    .user-card-meta {
+      font-size: 0.72rem;
+      color: var(--ink-dim);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .badge-chip {
+      background: var(--surface-3);
+      padding: 2px 7px;
+      border-radius: 10px;
+      color: var(--ink-dim);
+      font-size: 0.68rem;
+    }
+    .badge-chip.has-face {
+      background: var(--ok-glow);
+      color: var(--ok);
+      border: 1px solid rgba(16,185,129,0.3);
+    }
+    .user-card-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-switch-user {
+      padding: 7px 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xs);
+      color: var(--ink);
+      font-size: 0.75rem;
       font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-switch-user.active {
+      background: var(--ember);
+      color: #000;
+      border-color: var(--ember);
+      font-weight: 600;
+    }
+    .btn-switch-user:active { transform: scale(0.96); }
+    .btn-delete-user {
+      width: 30px;
+      height: 30px;
+      border-radius: var(--radius-xs);
+      background: transparent;
+      border: 1px solid var(--border-light);
+      color: var(--danger);
+      font-size: 1.1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .btn-delete-user:active { background: var(--danger-glow); }
+
+    /* Floating / Header Add User CTA */
+    .btn-open-register {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 13px;
+      background: var(--surface);
+      border: 1px dashed var(--border-active);
+      border-radius: var(--radius);
+      color: var(--ember);
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 14px;
+      transition: background 0.15s;
+    }
+    .btn-open-register:active { background: var(--surface-2); }
+
+    /* Registration Modal */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.8);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      z-index: 200;
+      align-items: flex-end;
+      justify-content: center;
+      animation: modalFadeIn 0.2s ease-out;
+    }
+    .modal-backdrop.open { display: flex; }
+    @keyframes modalFadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .modal-sheet {
+      width: 100%;
+      max-width: 480px;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      border-radius: 24px 24px 0 0;
+      padding: 20px 20px calc(24px + var(--safe-bottom));
+      max-height: 90vh;
+      overflow-y: auto;
+      animation: modalSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    @keyframes modalSlideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .modal-title { font-family: 'Space Grotesk', sans-serif; font-size: 1.15rem; font-weight: 600; }
+    .modal-close {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--surface-2);
+      border: none;
+      color: var(--ink-dim);
+      font-size: 1.2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .selfie-card {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      text-align: center;
+      margin: 12px 0 16px;
+      position: relative;
+      background: var(--surface-2);
+    }
+    .selfie-preview-img {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      object-fit: cover;
+      margin: 0 auto 8px;
+      display: none;
+      border: 2px solid var(--ember);
+    }
+    .selfie-camera-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--surface-3);
+      border: 1px solid var(--border);
+      color: var(--ink);
+      padding: 8px 16px;
+      border-radius: 20px;
+      font-size: 0.82rem;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .selfie-hint {
+      font-size: 0.72rem;
+      color: var(--ink-dim);
+      margin-top: 6px;
+      line-height: 1.4;
     }
 
-    /* Items Grid */
-    .items-grid {
+    /* ═══════════════════════════════════════════════
+       TAB 4: REMOTE & TELEMETRY
+       ═══════════════════════════════════════════════ */
+
+    /* Live Mirror Status Bar */
+    .mirror-status-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .status-left { display: flex; align-items: center; gap: 10px; }
+    .status-indicator-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--ok);
+      box-shadow: 0 0 10px var(--ok);
+    }
+    .status-indicator-dot.offline {
+      background: var(--danger);
+      box-shadow: 0 0 10px var(--danger);
+    }
+    .mirror-title { font-size: 0.9rem; font-weight: 600; }
+    .mirror-host-sub { font-size: 0.72rem; color: var(--ink-dim); }
+
+    /* Privacy Toggle Card */
+    .privacy-toggle-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .privacy-toggle-card.active {
+      border-color: var(--danger);
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(20,20,26,0.9) 100%);
+    }
+    .privacy-info { display: flex; align-items: center; gap: 12px; }
+    .privacy-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background: var(--surface-2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3rem;
+    }
+    .privacy-toggle-card.active .privacy-icon { background: var(--danger-glow); color: var(--danger); }
+    .privacy-title { font-size: 0.92rem; font-weight: 600; }
+    .privacy-desc { font-size: 0.72rem; color: var(--ink-dim); margin-top: 2px; }
+
+    /* Switch Component */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 46px;
+      height: 26px;
+      pointer-events: none;
+    }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background-color: var(--surface-3);
+      border-radius: 26px;
+      transition: .3s;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 20px;
+      width: 20px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      border-radius: 50%;
+      transition: .3s;
+    }
+    input:checked + .slider { background-color: var(--danger); }
+    input:checked + .slider:before { transform: translateX(20px); }
+
+    /* Telemetry 4-Grid */
+    .telemetry-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 12px;
+      gap: 10px;
+      margin-bottom: 16px;
     }
-    .item-card {
+    .telemetry-card {
       background: var(--surface);
       border: 1px solid var(--border-light);
       border-radius: var(--radius);
-      overflow: hidden;
-      position: relative;
-      transition: transform 0.15s ease;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
     }
-    .item-card:active { transform: scale(0.97); }
-    .item-card img {
-      width: 100%;
-      height: 140px;
-      object-fit: cover;
-      display: block;
-    }
-    .item-card .no-img {
-      width: 100%;
-      height: 140px;
+    .telem-top {
       display: flex;
       align-items: center;
-      justify-content: center;
-      background: var(--bg);
+      justify-content: space-between;
+      color: var(--ink-dim);
+      font-size: 0.75rem;
+    }
+    .telem-val {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 1.45rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+    .telem-sub {
+      font-size: 0.68rem;
       color: var(--ink-faint);
-      font-size: 2.4rem;
     }
-    .item-info { padding: 10px 12px; }
-    .item-name {
-      font-size: 0.85rem;
-      font-weight: 500;
-      margin-bottom: 3px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .item-meta {
-      font-size: 0.72rem;
-      color: var(--ink-dim);
-      text-transform: capitalize;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-    .item-color-dot {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      border: 1px solid var(--border);
-      flex-shrink: 0;
-    }
-    .btn-delete {
-      position: absolute;
-      top: 8px;
-      right: 8px;
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      background: rgba(0,0,0,0.65);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      border: 1px solid rgba(232,93,93,0.35);
-      color: var(--danger);
-      font-size: 0.85rem;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      opacity: 0;
-      transition: opacity 0.2s;
-    }
-    .item-card:hover .btn-delete,
-    .item-card .btn-delete { opacity: 1; }
 
-    .empty-state {
-      text-align: center;
-      padding: 48px 20px;
-      color: var(--ink-dim);
-      font-size: 0.9rem;
-      grid-column: 1 / -1;
+    /* Live Mirror AI Stylist Feed */
+    .mirror-stylist-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: 16px;
+      margin-bottom: 16px;
     }
-    .empty-state .empty-icon { font-size: 3rem; margin-bottom: 12px; }
-    .empty-state p { line-height: 1.5; }
+    .stylist-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .stylist-label { font-family: 'Space Grotesk', sans-serif; font-size: 0.92rem; font-weight: 600; }
+    .stylist-score-pill {
+      font-size: 0.72rem;
+      background: var(--ember-glow);
+      color: var(--ember);
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+    .stylist-advice-text {
+      font-size: 0.82rem;
+      color: var(--ink-dim);
+      line-height: 1.45;
+      background: var(--surface-2);
+      padding: 10px 12px;
+      border-radius: var(--radius-xs);
+      border-left: 2px solid var(--ember);
+    }
+
+    /* Reminders Manager Card */
+    .reminders-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+    .reminders-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 12px 0;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+    .reminder-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface-2);
+      border-radius: var(--radius-xs);
+      padding: 8px 12px;
+      font-size: 0.82rem;
+    }
+    .reminder-time {
+      color: var(--ember);
+      font-weight: 600;
+      font-size: 0.75rem;
+      margin-right: 8px;
+    }
+    .btn-del-reminder {
+      background: transparent;
+      border: none;
+      color: var(--ink-faint);
+      font-size: 1rem;
+      cursor: pointer;
+      padding: 2px 6px;
+    }
+    .btn-del-reminder:active { color: var(--danger); }
+    .reminder-form {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .reminder-input {
+      flex: 1;
+      padding: 8px 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xs);
+      color: var(--ink);
+      font-size: 0.82rem;
+    }
+    .reminder-time-input {
+      width: 86px;
+      padding: 8px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xs);
+      color: var(--ink);
+      font-size: 0.82rem;
+    }
+    .btn-add-reminder {
+      padding: 8px 14px;
+      background: var(--ember);
+      color: #000;
+      border: none;
+      border-radius: var(--radius-xs);
+      font-weight: 600;
+      font-size: 0.82rem;
+      cursor: pointer;
+    }
 
     /* ═══════════════════════════════════════════════
-       BOTTOM NAVIGATION
+       BOTTOM NAVIGATION BAR
        ═══════════════════════════════════════════════ */
 
     .bottom-nav {
@@ -466,254 +1123,470 @@
       display: flex;
       align-items: center;
       justify-content: space-around;
-      height: calc(68px + var(--safe-bottom));
+      height: calc(64px + var(--safe-bottom));
       padding-bottom: var(--safe-bottom);
       background: var(--glass);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
       border-top: 1px solid var(--border);
       z-index: 100;
     }
-    .nav-item {
+    .nav-tab {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 4px;
+      gap: 3px;
       cursor: pointer;
-      padding: 8px 16px;
-      transition: color 0.2s;
-      -webkit-tap-highlight-color: transparent;
+      padding: 6px 14px;
+      color: var(--ink-faint);
+      transition: color 0.15s;
     }
-    .nav-item .nav-icon { font-size: 1.4rem; line-height: 1; }
-    .nav-item .nav-label {
+    .nav-tab.active { color: var(--ember); }
+    .nav-tab-icon { font-size: 1.3rem; line-height: 1; }
+    .nav-tab-label {
       font-size: 0.65rem;
       text-transform: uppercase;
-      letter-spacing: 0.06em;
-      font-weight: 500;
-    }
-    .nav-item { color: var(--ink-faint); }
-    .nav-item.active { color: var(--ember); }
-    .nav-item.active .nav-dot {
-      width: 4px; height: 4px;
-      background: var(--ember);
-      border-radius: 50%;
-      position: absolute;
-      bottom: -2px;
+      letter-spacing: 0.05em;
+      font-weight: 600;
     }
 
-    /* Camera nav button - special style */
-    .nav-item.camera-nav {
+    /* Elevated Scan Center Button */
+    .nav-tab.scan-nav {
       position: relative;
-      top: -8px;
+      top: -10px;
     }
-    .nav-item.camera-nav .nav-icon-wrap {
-      width: 52px;
-      height: 52px;
+    .nav-tab.scan-nav .scan-btn-circle {
+      width: 48px;
+      height: 48px;
       border-radius: 50%;
-      background: var(--ember);
+      background: var(--ember-gradient);
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 4px 20px var(--ember-glow);
-      transition: transform 0.15s;
+      color: #000;
+      box-shadow: 0 4px 18px var(--ember-glow);
+      transition: transform 0.15s ease;
     }
-    .nav-item.camera-nav:active .nav-icon-wrap { transform: scale(0.9); }
-    .nav-item.camera-nav .nav-icon { color: #0a0a0a; font-size: 1.5rem; }
-    .nav-item.camera-nav .nav-label { color: var(--ember); }
+    .nav-tab.scan-nav:active .scan-btn-circle { transform: scale(0.92); }
+    .nav-tab.scan-nav .nav-tab-icon { font-size: 1.4rem; color: #000; }
+    .nav-tab.scan-nav.active .nav-tab-label { color: var(--ember); }
 
-    /* ── Toast Notification ── */
-    .toast {
+    /* ── Toast Notifications ── */
+    .toast-msg {
       position: fixed;
-      top: 20px;
+      top: 16px;
       left: 50%;
       transform: translateX(-50%) translateY(-100px);
-      max-width: 360px;
-      width: calc(100% - 40px);
-      padding: 14px 18px;
+      max-width: 380px;
+      width: calc(100% - 32px);
+      padding: 12px 16px;
       border-radius: var(--radius-sm);
       font-size: 0.85rem;
       font-weight: 500;
       text-align: center;
-      z-index: 200;
-      transition: transform 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+      z-index: 300;
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
     }
-    .toast.visible { transform: translateX(-50%) translateY(0); }
-    .toast.success {
-      background: rgba(111,174,127,0.2);
-      border: 1px solid rgba(111,174,127,0.35);
-      color: var(--ok);
-    }
-    .toast.error {
-      background: rgba(232,93,93,0.2);
-      border: 1px solid rgba(232,93,93,0.35);
-      color: var(--danger);
-    }
-
-    /* ── Scanning Overlay Text ── */
-    .scan-status-text {
-      font-size: 0.85rem;
-      color: var(--ember);
-      text-align: center;
-      margin-top: 12px;
-      display: none;
-    }
-    .scan-ring.scanning ~ .scan-status-text { display: block; }
+    .toast-msg.visible { transform: translateX(-50%) translateY(0); }
+    .toast-msg.success { background: rgba(16, 185, 129, 0.25); border: 1px solid var(--ok); color: #a7f3d0; }
+    .toast-msg.error { background: rgba(239, 68, 68, 0.25); border: 1px solid var(--danger); color: #fecaca; }
   </style>
 </head>
 <body>
   <div class="app">
-    <!-- ═══ Toast ═══ -->
-    <div class="toast" id="toast"></div>
+
+    <!-- Toast Notification -->
+    <div class="toast-msg" id="toast"></div>
+
+    <!-- ═══ TOP APP BAR ═══ -->
+    <header class="top-bar">
+      <div class="brand">
+        <div class="brand-logo">R</div>
+        <div class="brand-title">Reflect<span>AI</span></div>
+      </div>
+      <div class="active-user-pill" onclick="switchTab('tab-users')">
+        <img class="active-user-avatar" id="top-user-avatar" src="/avatar/guest" alt="Avatar" />
+        <span class="active-user-name" id="top-user-name">Guest</span>
+        <span class="live-dot" title="Live sync with Smart Mirror"></span>
+      </div>
+    </header>
 
     <!-- ═══════════════════════════════════════════
-         VIEW: CAMERA (Scan & Add)
+         TAB 1: CLOSET
          ═══════════════════════════════════════════ -->
-    <div class="view active" id="view-camera">
-      <div class="header">
-        <span class="header-title">Scan Clothing</span>
+    <main class="view active" id="tab-closet">
+
+      <!-- Today's Outfit AI Recommendation Card -->
+      <section class="outfit-hero" id="outfit-hero">
+        <div class="outfit-top-row">
+          <span class="outfit-tag">✨ Recommended Outfit</span>
+          <span class="outfit-weather-pill" id="outfit-weather-tag">Loading weather…</span>
+        </div>
+        <div class="outfit-pieces-grid" id="outfit-pieces">
+          <div class="outfit-piece-card">
+            <div class="piece-icon-fallback">👕</div>
+            <span class="piece-cat">Top</span>
+            <span class="piece-name" id="rec-top-name">—</span>
+          </div>
+          <div class="outfit-piece-card">
+            <div class="piece-icon-fallback">👖</div>
+            <span class="piece-cat">Bottom</span>
+            <span class="piece-name" id="rec-bottom-name">—</span>
+          </div>
+          <div class="outfit-piece-card">
+            <div class="piece-icon-fallback">👟</div>
+            <span class="piece-cat">Shoes</span>
+            <span class="piece-name" id="rec-shoes-name">—</span>
+          </div>
+        </div>
+        <div class="outfit-reason-box" id="rec-reason-box">
+          <span>💡</span>
+          <span id="rec-reason-text">Personalizing recommendation based on today's weather and style profile...</span>
+        </div>
+      </section>
+
+      <!-- Category Filter Tabs -->
+      <div class="section-header">
+        <span class="section-title">My Wardrobe</span>
+        <span class="section-badge" id="closet-total-count">0 items</span>
       </div>
-      <div class="camera-view">
-        <!-- Scan Hero -->
+      <div class="tabs-bar" id="category-tabs">
+        <button class="cat-tab active" data-cat="all">All</button>
+        <button class="cat-tab" data-cat="top">👕 Tops</button>
+        <button class="cat-tab" data-cat="bottom">👖 Bottoms</button>
+        <button class="cat-tab" data-cat="footwear">👟 Footwear</button>
+        <button class="cat-tab" data-cat="outerwear">🧥 Outerwear</button>
+        <button class="cat-tab" data-cat="accessory">💍 Accessories</button>
+      </div>
+
+      <!-- Items Grid -->
+      <div class="wardrobe-grid" id="wardrobe-grid"></div>
+    </main>
+
+    <!-- ═══════════════════════════════════════════
+         TAB 2: SCAN CLOTHING
+         ═══════════════════════════════════════════ -->
+    <main class="view" id="tab-scan">
+      <div class="scan-view-content">
+
+        <!-- Scan Hero Action Ring -->
         <div class="scan-hero" id="scan-hero">
-          <div class="scan-ring" id="scan-ring" onclick="triggerScan()">
-            <div class="ring-inner">
-              <span class="ring-icon">📷</span>
-              <span class="ring-label">Scan</span>
-              <div class="ring-spinner"></div>
+          <div class="scan-target" id="scan-target" onclick="triggerScanInput()">
+            <div class="scan-ring-outer"></div>
+            <div class="scan-inner-circle">
+              <span class="scan-circle-icon">📷</span>
+              <span class="scan-circle-text">Scan Garment</span>
+              <div class="scan-spinner"></div>
             </div>
           </div>
-          <p class="scan-subtitle">
-            Take a photo of your clothing item.<br>
-            AI will auto-detect the category & color.
+          <p class="scan-hints">
+            Snap a photo of any garment.<br>
+            AI automatically classifies <strong>category, color & weather suitability</strong>.
           </p>
-          <p class="scan-status-text" id="scan-status">Analyzing with AI...</p>
         </div>
-        <input type="file" accept="image/*" capture="environment" id="scan-input" class="scan-file-input" />
 
-        <!-- Detection Result Card -->
-        <div class="detect-card" id="detect-card">
-          <img class="detect-preview" id="detect-preview" src="" alt="Preview" />
-          <div class="detect-body">
-            <div class="detect-ai-tag">✨ AI Detected</div>
+        <input type="file" accept="image/*" capture="environment" id="scan-file-input" style="display: none;" />
 
-            <div class="detect-chips-label">Garment Type (1-Tap Override)</div>
-            <div class="detect-chips" id="detect-chips">
-              <button type="button" class="chip-btn active" data-cat="top" data-sub="T-Shirt" onclick="selectChipGarment('top', 'T-Shirt')">
-                <span class="chip-emoji">👕</span>
-                <span>T-Shirt</span>
+        <!-- AI Detection Card -->
+        <div class="detect-result-card" id="detect-card">
+          <img class="detect-photo-preview" id="detect-preview" src="" alt="Preview" />
+          <div class="detect-card-body">
+            <div class="chips-label">Garment Category (1-Tap Override)</div>
+            <div class="chip-grid" id="chip-grid">
+              <button type="button" class="chip active" data-cat="top" data-sub="T-Shirt" onclick="selectChip('top', 'T-Shirt')">
+                <span>👕</span><span>T-Shirt</span>
               </button>
-              <button type="button" class="chip-btn" data-cat="top" data-sub="Shirt" onclick="selectChipGarment('top', 'Shirt')">
-                <span class="chip-emoji">👔</span>
-                <span>Shirt</span>
+              <button type="button" class="chip" data-cat="top" data-sub="Shirt" onclick="selectChip('top', 'Shirt')">
+                <span>👔</span><span>Shirt</span>
               </button>
-              <button type="button" class="chip-btn" data-cat="bottom" data-sub="Pants" onclick="selectChipGarment('bottom', 'Pants')">
-                <span class="chip-emoji">👖</span>
-                <span>Bottom</span>
+              <button type="button" class="chip" data-cat="bottom" data-sub="Pants" onclick="selectChip('bottom', 'Pants')">
+                <span>👖</span><span>Pants</span>
               </button>
-              <button type="button" class="chip-btn" data-cat="outerwear" data-sub="Jacket" onclick="selectChipGarment('outerwear', 'Jacket')">
-                <span class="chip-emoji">🧥</span>
-                <span>Jacket</span>
+              <button type="button" class="chip" data-cat="outerwear" data-sub="Jacket" onclick="selectChip('outerwear', 'Jacket')">
+                <span>🧥</span><span>Jacket</span>
               </button>
-              <button type="button" class="chip-btn" data-cat="footwear" data-sub="Shoes" onclick="selectChipGarment('footwear', 'Shoes')">
-                <span class="chip-emoji">👟</span>
-                <span>Shoes</span>
+              <button type="button" class="chip" data-cat="footwear" data-sub="Sneakers" onclick="selectChip('footwear', 'Sneakers')">
+                <span>👟</span><span>Shoes</span>
               </button>
             </div>
 
-            <div class="detect-fields">
-              <div class="detect-field">
-                <label>Name</label>
-                <input type="text" id="det-name" placeholder="e.g. Blue Denim Jacket" />
-              </div>
-              <div class="detect-field">
-                <label>Category</label>
-                <select id="det-category">
-                  <option value="top">Top</option>
-                  <option value="bottom">Bottom</option>
-                  <option value="footwear">Footwear</option>
-                  <option value="outerwear">Outerwear</option>
-                  <option value="accessory">Accessory</option>
-                </select>
-              </div>
-              <div class="detect-field">
-                <label>Color</label>
-                <input type="text" id="det-color" placeholder="e.g. Navy blue" />
-              </div>
-              <div class="detect-field">
-                <label>Best For Weather</label>
-                <select id="det-weather">
-                  <option value="any">Any Weather</option>
-                  <option value="hot">Hot (30°+)</option>
-                  <option value="warm">Warm (24°–30°)</option>
-                  <option value="cool">Cool (15°–24°)</option>
-                  <option value="cold">Cold (below 15°)</option>
-                  <option value="rain">Rainy Days</option>
-                </select>
-              </div>
+            <div class="form-group">
+              <label class="form-label">Garment Name</label>
+              <input type="text" class="form-input" id="det-name" placeholder="e.g. Navy Blue Denim Jacket" />
             </div>
-            <div class="detect-actions">
-              <button class="btn-cancel" onclick="cancelDetection()">Cancel</button>
-              <button class="btn-confirm" id="btn-confirm" onclick="confirmAdd()">Add to Wardrobe</button>
+
+            <div class="form-group">
+              <label class="form-label">Category</label>
+              <select class="form-select" id="det-category">
+                <option value="top">Top</option>
+                <option value="bottom">Bottom</option>
+                <option value="footwear">Footwear</option>
+                <option value="outerwear">Outerwear</option>
+                <option value="accessory">Accessory</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Color</label>
+              <input type="text" class="form-input" id="det-color" placeholder="e.g. Navy blue, Black, Olive" />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Weather Suitability</label>
+              <select class="form-select" id="det-weather">
+                <option value="any">Any Weather</option>
+                <option value="hot">Hot (30°C+)</option>
+                <option value="warm">Warm (24°–30°C)</option>
+                <option value="cool">Cool (15°–24°C)</option>
+                <option value="cold">Cold (Below 15°C)</option>
+                <option value="rain">Rainy Weather</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Occasion</label>
+              <select class="form-select" id="det-occasion">
+                <option value="casual">Casual / Daily</option>
+                <option value="formal">Work / Formal</option>
+                <option value="sport">Sport / Workout</option>
+                <option value="evening">Evening / Party</option>
+              </select>
+            </div>
+
+            <div class="form-actions-row">
+              <button type="button" class="btn-ghost" onclick="cancelScan()">Cancel</button>
+              <button type="button" class="btn-submit" id="btn-save-item" onclick="saveGarment()">Add to Wardrobe</button>
             </div>
           </div>
         </div>
+
       </div>
-    </div>
+    </main>
 
     <!-- ═══════════════════════════════════════════
-         VIEW: CLOSET (Your Items)
+         TAB 3: USERS & FACE ID
          ═══════════════════════════════════════════ -->
-    <div class="view" id="view-closet">
-      <div class="header">
-        <span class="header-title">My Closet</span>
-        <span class="header-count" id="item-count">0 items</span>
-      </div>
-      <div class="closet-view">
-        <div class="tabs" id="category-tabs">
-          <span class="tab active" data-cat="all">All</span>
-          <span class="tab" data-cat="top">👕 Tops</span>
-          <span class="tab" data-cat="bottom">👖 Bottoms</span>
-          <span class="tab" data-cat="footwear">👟 Footwear</span>
-          <span class="tab" data-cat="outerwear">🧥 Outerwear</span>
-          <span class="tab" data-cat="accessory">💍 Accessories</span>
+    <main class="view" id="tab-users">
+      
+      <!-- Active Mirror Banner -->
+      <section class="active-profile-card">
+        <img class="active-profile-avatar" id="banner-user-avatar" src="/avatar/guest" alt="Active user" />
+        <div class="active-profile-details">
+          <div class="active-badge-tag"><span class="live-dot"></span> Active On Mirror</div>
+          <div class="active-profile-name" id="banner-user-name">Guest</div>
+          <div class="active-profile-sub" id="banner-user-style">Style: Casual · Mirror synced</div>
         </div>
-        <div class="items-grid" id="items-grid"></div>
-      </div>
-    </div>
+      </section>
 
-    <!-- ═══ Bottom Navigation ═══ -->
-    <nav class="bottom-nav">
-      <div class="nav-item" data-view="view-closet" onclick="switchView('view-closet')">
-        <span class="nav-icon">👔</span>
-        <span class="nav-label">Closet</span>
+      <div class="section-header">
+        <span class="section-title">All Profiles & Face ID</span>
+        <span class="section-badge" id="profiles-count">0 profiles</span>
       </div>
-      <div class="nav-item camera-nav active" data-view="view-camera" onclick="switchView('view-camera')">
-        <div class="nav-icon-wrap">
-          <span class="nav-icon">📷</span>
+
+      <div class="user-list" id="users-container"></div>
+
+      <button class="btn-open-register" onclick="openRegisterModal()">
+        <span>+</span> Register New User & Face ID
+      </button>
+
+      <!-- Register User & Face ID Modal -->
+      <div class="modal-backdrop" id="register-modal">
+        <div class="modal-sheet">
+          <div class="modal-header">
+            <span class="modal-title">Register User & Face ID</span>
+            <button class="modal-close" onclick="closeRegisterModal()">×</button>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Display Name *</label>
+            <input type="text" class="form-input" id="reg-name" placeholder="e.g. Rohan, Sarah, Ayush" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Preferred Style</label>
+            <select class="form-select" id="reg-style">
+              <option value="Casual">Casual / Everyday</option>
+              <option value="Streetwear">Streetwear & Modern</option>
+              <option value="Formal">Formal & Business</option>
+              <option value="Sporty">Athletic & Sporty</option>
+              <option value="Minimalist">Minimalist / Clean</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Hair Preference Note</label>
+            <input type="text" class="form-input" id="reg-hair" placeholder="e.g. Textured Crop, Fade, Wavy" />
+          </div>
+
+          <!-- Selfie Capture Area -->
+          <div class="selfie-card">
+            <img class="selfie-preview-img" id="selfie-preview" src="" alt="Selfie" />
+            <div id="selfie-action-box">
+              <span style="font-size: 1.8rem; display:block; margin-bottom:6px;">🤳</span>
+              <button type="button" class="selfie-camera-btn" onclick="triggerSelfieCapture()">
+                Take Face Selfie
+              </button>
+              <p class="selfie-hint">
+                YuNet + SFace will extract a 128-D facial feature vector so the Smart Mirror recognizes you automatically.
+              </p>
+            </div>
+            <input type="file" accept="image/*" capture="user" id="selfie-file-input" style="display: none;" />
+          </div>
+
+          <div class="form-actions-row">
+            <button type="button" class="btn-ghost" onclick="closeRegisterModal()">Cancel</button>
+            <button type="button" class="btn-submit" id="btn-submit-register" onclick="submitRegisterUser()">Register Profile</button>
+          </div>
         </div>
-        <span class="nav-label">Scan</span>
       </div>
-      <div class="nav-item" onclick="goMirror()">
-        <span class="nav-icon">🪞</span>
-        <span class="nav-label">Mirror</span>
+    </main>
+
+    <!-- ═══════════════════════════════════════════
+         TAB 4: MIRROR REMOTE & TELEMETRY
+         ═══════════════════════════════════════════ -->
+    <main class="view" id="tab-remote">
+      
+      <!-- Mirror Server Status -->
+      <div class="mirror-status-card">
+        <div class="status-left">
+          <span class="status-indicator-dot" id="remote-conn-dot"></span>
+          <div>
+            <div class="mirror-title">Smart Mirror Dashboard</div>
+            <div class="mirror-host-sub" id="remote-conn-sub">Port 5000 · Live sync</div>
+          </div>
+        </div>
+        <button class="btn-ghost" style="padding: 6px 12px; font-size: 0.75rem;" onclick="refreshRemoteData()">Refresh</button>
+      </div>
+
+      <!-- 1-Tap Privacy Toggle -->
+      <div class="privacy-toggle-card" id="privacy-card" onclick="togglePrivacyMode()">
+        <div class="privacy-info">
+          <div class="privacy-icon">🛡️</div>
+          <div>
+            <div class="privacy-title">Privacy Mode</div>
+            <div class="privacy-desc" id="privacy-desc">Camera & personal widgets active</div>
+          </div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="privacy-checkbox">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <!-- Live ESP32 Hardware Climate Telemetry -->
+      <div class="section-header">
+        <span class="section-title">ESP32 Room Telemetry</span>
+        <span class="section-badge" id="esp32-status-pill">DHT22 Live</span>
+      </div>
+      <div class="telemetry-grid">
+        <div class="telemetry-card">
+          <div class="telem-top">
+            <span>Temperature</span>
+            <span>🌡️</span>
+          </div>
+          <div class="telem-val" id="telem-temp">--°C</div>
+          <div class="telem-sub">Room Sensor</div>
+        </div>
+        <div class="telemetry-card">
+          <div class="telem-top">
+            <span>Humidity</span>
+            <span>💧</span>
+          </div>
+          <div class="telem-val" id="telem-hum">--%</div>
+          <div class="telem-sub">Relative Hum.</div>
+        </div>
+        <div class="telemetry-card">
+          <div class="telem-top">
+            <span>Room Light</span>
+            <span>💡</span>
+          </div>
+          <div class="telem-val" id="telem-light">--</div>
+          <div class="telem-sub">Ambient Lux</div>
+        </div>
+        <div class="telemetry-card">
+          <div class="telem-top">
+            <span>Motion</span>
+            <span>🚶</span>
+          </div>
+          <div class="telem-val" id="telem-motion">Clear</div>
+          <div class="telem-sub">PIR Sensor</div>
+        </div>
+      </div>
+
+      <!-- Live Mirror AI Stylist Feed -->
+      <div class="mirror-stylist-card">
+        <div class="stylist-header">
+          <span class="stylist-label">👁️ Mirror Camera Stylist</span>
+          <span class="stylist-score-pill" id="stylist-score-pill">Analyzing</span>
+        </div>
+        <div class="stylist-advice-text" id="stylist-advice-text">
+          Stand in front of the mirror camera for live outfit feedback and grooming inspection.
+        </div>
+      </div>
+
+      <!-- Agenda & Reminders Manager -->
+      <div class="reminders-card">
+        <div class="section-header" style="margin: 0 0 8px;">
+          <span class="section-title">Mirror Schedule & Reminders</span>
+          <span class="section-badge" id="reminders-badge">0 items</span>
+        </div>
+        <div class="reminders-list" id="reminders-list">
+          <div style="font-size:0.8rem; color:var(--ink-dim); text-align:center; padding:10px;">No reminders set.</div>
+        </div>
+        <div class="reminder-form">
+          <input type="text" class="reminder-input" id="new-reminder-title" placeholder="Add reminder..." />
+          <input type="text" class="reminder-time-input" id="new-reminder-time" placeholder="10:30 AM" />
+          <button type="button" class="btn-add-reminder" onclick="addReminder()">Add</button>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- ═══ BOTTOM NAVIGATION ═══ -->
+    <nav class="bottom-nav">
+      <div class="nav-tab active" data-tab="tab-closet" onclick="switchTab('tab-closet')">
+        <span class="nav-tab-icon">👗</span>
+        <span class="nav-tab-label">Closet</span>
+      </div>
+      <div class="nav-tab scan-nav" data-tab="tab-scan" onclick="switchTab('tab-scan')">
+        <div class="scan-btn-circle">
+          <span class="nav-tab-icon">📷</span>
+        </div>
+        <span class="nav-tab-label">Scan</span>
+      </div>
+      <div class="nav-tab" data-tab="tab-users" onclick="switchTab('tab-users')">
+        <span class="nav-tab-icon">👤</span>
+        <span class="nav-tab-label">Users</span>
+      </div>
+      <div class="nav-tab" data-tab="tab-remote" onclick="switchTab('tab-remote')">
+        <span class="nav-tab-icon">🪞</span>
+        <span class="nav-tab-label">Remote</span>
       </div>
     </nav>
+
   </div>
 
   <script>
-    /* ── State ── */
-    let allItems = [];
-    let activeFilter = 'all';
-    let pendingFile = null;
+    /* ═══════════════════════════════════════════════
+       STATE & CONSTANTS
+       ═══════════════════════════════════════════════ */
+    let currentTab = 'tab-closet';
+    let allWardrobeItems = [];
+    let currentFilter = 'all';
+    let activeUserId = 'guest';
+    let activeUserName = 'Guest';
+    let pendingScanFile = null;
+    let pendingSelfieFile = null;
+    let telemetryTimer = null;
 
-    const CATEGORY_EMOJI = {
+    const CATEGORY_ICONS = {
       top: '👕', bottom: '👖', footwear: '👟', outerwear: '🧥', accessory: '💍'
     };
 
-    const COLOR_MAP = {
-      'white': '#ffffff', 'black': '#222222', 'blue': '#3b82f6',
+    const COLOR_PALETTE = {
+      'white': '#ffffff', 'black': '#1a1a1a', 'blue': '#3b82f6',
       'navy': '#1e3a5f', 'navy blue': '#1e3a5f', 'red': '#ef4444',
       'green': '#22c55e', 'yellow': '#eab308', 'grey': '#9ca3af',
       'gray': '#9ca3af', 'beige': '#d4c5a9', 'brown': '#92400e',
@@ -721,254 +1594,579 @@
       'cream': '#f5f0e1', 'maroon': '#7f1d1d', 'olive': '#6b7a3e',
     };
 
-    /* ── Navigation ── */
-    function switchView(viewId) {
+    /* ═══════════════════════════════════════════════
+       NAVIGATION
+       ═══════════════════════════════════════════════ */
+    function switchTab(tabId) {
+      currentTab = tabId;
       document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-      document.getElementById(viewId).classList.add('active');
-      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-      document.querySelector(`.nav-item[data-view="${viewId}"]`)?.classList.add('active');
+      document.getElementById(tabId)?.classList.add('active');
 
-      if (viewId === 'view-closet') loadItems();
+      document.querySelectorAll('.nav-tab').forEach(n => n.classList.remove('active'));
+      document.querySelector(`.nav-tab[data-tab="${tabId}"]`)?.classList.add('active');
+
+      if (tabId === 'tab-closet') {
+        loadWardrobe();
+        loadOutfitRecommendation();
+      } else if (tabId === 'tab-users') {
+        loadUsers();
+      } else if (tabId === 'tab-remote') {
+        refreshRemoteData();
+      }
     }
 
-    function goMirror() {
-      window.location.href = '/';
-    }
-
-    /* ── Toast ── */
+    /* ── Toast Messages ── */
     function showToast(text, type = 'success') {
-      const el = document.getElementById('toast');
-      el.textContent = text;
-      el.className = 'toast ' + type;
-      requestAnimationFrame(() => el.classList.add('visible'));
-      setTimeout(() => el.classList.remove('visible'), 2800);
+      const toast = document.getElementById('toast');
+      toast.textContent = text;
+      toast.className = 'toast-msg ' + type;
+      requestAnimationFrame(() => toast.classList.add('visible'));
+      setTimeout(() => toast.classList.remove('visible'), 2800);
     }
 
-    /* ── Camera / Scan ── */
-    function triggerScan() {
-      document.getElementById('scan-input').click();
+    /* ═══════════════════════════════════════════════
+       TAB 1: CLOSET & OUTFIT
+       ═══════════════════════════════════════════════ */
+    async function loadWardrobe() {
+      try {
+        const res = await fetch(`/api/wardrobe?user_id=${encodeURIComponent(activeUserId)}`);
+        const data = await res.json();
+        allWardrobeItems = data.items || [];
+        document.getElementById('closet-total-count').textContent = `${allWardrobeItems.length} item${allWardrobeItems.length !== 1 ? 's' : ''}`;
+        renderWardrobeGrid();
+      } catch (err) {
+        console.error('Failed to load wardrobe:', err);
+      }
     }
 
-    document.getElementById('scan-input').addEventListener('change', async function() {
+    function renderWardrobeGrid() {
+      const grid = document.getElementById('wardrobe-grid');
+      let items = allWardrobeItems;
+      if (currentFilter !== 'all') {
+        items = allWardrobeItems.filter(i => i.category === currentFilter);
+      }
+
+      if (!items.length) {
+        grid.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">${CATEGORY_ICONS[currentFilter] || '👗'}</div>
+            <div class="empty-state-title">No ${currentFilter === 'all' ? 'clothing' : currentFilter} items yet</div>
+            <p class="empty-state-p">Snap a photo using the AI scanner to start building your smart digital closet.</p>
+            <button class="btn-cta-scan" onclick="switchTab('tab-scan')">📷 Scan First Garment</button>
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = items.map(item => {
+        const imgEl = item.image_filename
+          ? `<img class="card-photo" src="/wardrobe-images/${item.user_id}/${item.image_filename}" alt="${item.name}" loading="lazy" />`
+          : `<div class="card-no-photo">${CATEGORY_ICONS[item.category] || '👕'}</div>`;
+
+        const colorHex = item.color ? (COLOR_PALETTE[item.color.toLowerCase().trim()] || 'var(--ember)') : null;
+        const colorTag = item.color
+          ? `<span class="card-color-tag"><span class="color-dot" style="background:${colorHex}"></span>${item.color}</span>`
+          : `<span class="card-color-tag">${item.category}</span>`;
+
+        return `
+          <div class="wardrobe-card">
+            <div class="card-photo-wrap">
+              ${imgEl}
+              <button class="card-del-btn" onclick="deleteGarmentItem(${item.id})" title="Delete item">×</button>
+            </div>
+            <div class="card-content">
+              <div class="card-name">${escapeHtml(item.name)}</div>
+              <div class="card-meta-row">
+                ${colorTag}
+                <span class="card-weather-tag">${item.weather || 'any'}</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function deleteGarmentItem(itemId) {
+      if (!confirm('Remove this piece from your wardrobe?')) return;
+      try {
+        const res = await fetch(`/api/wardrobe/${itemId}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast('Garment removed', 'success');
+          loadWardrobe();
+          loadOutfitRecommendation();
+        } else {
+          showToast(data.error || 'Failed to remove', 'error');
+        }
+      } catch (e) {
+        showToast('Network error', 'error');
+      }
+    }
+
+    // Category Filter bar clicks
+    document.getElementById('category-tabs').addEventListener('click', (e) => {
+      const tab = e.target.closest('.cat-tab');
+      if (!tab) return;
+      document.querySelectorAll('.cat-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentFilter = tab.dataset.cat;
+      renderWardrobeGrid();
+    });
+
+    async function loadOutfitRecommendation() {
+      try {
+        const res = await fetch(`/api/outfit?user_id=${encodeURIComponent(activeUserId)}`);
+        const data = await res.json();
+        if (data && data.outfit) {
+          const rec = data.outfit;
+          document.getElementById('rec-top-name').textContent = rec.top?.name || 'Any Top';
+          document.getElementById('rec-bottom-name').textContent = rec.bottom?.name || 'Any Bottom';
+          document.getElementById('rec-shoes-name').textContent = rec.footwear?.name || 'Any Shoes';
+          document.getElementById('rec-reason-text').textContent = data.reason || 'Curated for today based on your active style and climate.';
+          if (data.weather) {
+            document.getElementById('outfit-weather-tag').textContent = `${data.weather.temp}°C · ${data.weather.condition}`;
+          }
+        }
+      } catch (err) {
+        console.warn('Outfit engine lookup:', err);
+      }
+    }
+
+    /* ═══════════════════════════════════════════════
+       TAB 2: SCAN & AI CLASSIFY
+       ═══════════════════════════════════════════════ */
+    function triggerScanInput() {
+      document.getElementById('scan-file-input').click();
+    }
+
+    document.getElementById('scan-file-input').addEventListener('change', async function() {
       if (!this.files.length) return;
-
       const file = this.files[0];
-      pendingFile = file;
+      pendingScanFile = file;
 
-      const ring = document.getElementById('scan-ring');
+      const target = document.getElementById('scan-target');
       const hero = document.getElementById('scan-hero');
       const card = document.getElementById('detect-card');
 
-      // Show scanning animation
-      ring.classList.add('scanning');
+      target.classList.add('scanning');
 
       // Show preview
       const previewUrl = URL.createObjectURL(file);
       document.getElementById('detect-preview').src = previewUrl;
 
-      // AI classify
+      // Call AI classification
       const formData = new FormData();
       formData.append('image', file);
 
       try {
-        const res = await fetch('/api/wardrobe/classify', {
-          method: 'POST',
-          body: formData,
-        });
+        const res = await fetch('/api/wardrobe/classify', { method: 'POST', body: formData });
         const data = await res.json();
-
-        ring.classList.remove('scanning');
+        target.classList.remove('scanning');
 
         if (data.status === 'ok' && data.prediction) {
-          const pred = data.prediction;
-          document.getElementById('det-name').value = pred.suggested_name || `${pred.color || ''} ${pred.sub_category || pred.category || 'Item'}`.trim();
-          document.getElementById('det-category').value = pred.category || 'top';
-          document.getElementById('det-color').value = pred.color || '';
-          highlightGarmentChip(pred.category || 'top', pred.sub_category || '');
+          const p = data.prediction;
+          const autoName = p.suggested_name || `${p.color || ''} ${p.sub_category || p.category || 'Garment'}`.trim();
+          document.getElementById('det-name').value = autoName;
+          document.getElementById('det-category').value = p.category || 'top';
+          document.getElementById('det-color').value = p.color || '';
+          highlightGarmentChip(p.category || 'top', p.sub_category || '');
         } else {
           highlightGarmentChip('top', 'T-Shirt');
         }
 
-        // Show detection card, hide hero
         hero.style.display = 'none';
         card.classList.add('visible');
-
-      } catch (err) {
-        console.error('AI classification error:', err);
-        ring.classList.remove('scanning');
-
-        // Still show card for manual entry
+      } catch (e) {
+        target.classList.remove('scanning');
+        // Manual entry fallback
         document.getElementById('det-name').value = '';
         document.getElementById('det-category').value = 'top';
         document.getElementById('det-color').value = '';
         highlightGarmentChip('top', 'T-Shirt');
-
         hero.style.display = 'none';
         card.classList.add('visible');
       }
 
-      // Reset input so same file can be re-selected
       this.value = '';
     });
 
     function highlightGarmentChip(cat, sub) {
-      let matched = false;
-      document.querySelectorAll('.chip-btn').forEach(btn => {
+      document.querySelectorAll('.chip').forEach(btn => {
         const catMatch = btn.dataset.cat === cat;
         const subMatch = !sub || (btn.dataset.sub && sub.toLowerCase().includes(btn.dataset.sub.toLowerCase()));
-        if (catMatch && subMatch && !matched) {
+        if (catMatch && subMatch) {
           btn.classList.add('active');
-          matched = true;
         } else {
           btn.classList.remove('active');
         }
       });
-      if (!matched) {
-        const fallbackBtn = document.querySelector(`.chip-btn[data-cat="${cat}"]`);
-        if (fallbackBtn) fallbackBtn.classList.add('active');
-      }
     }
 
-    function selectChipGarment(cat, sub) {
+    function selectChip(cat, sub) {
       document.getElementById('det-category').value = cat;
       highlightGarmentChip(cat, sub);
-
-      // Intelligently adapt suggested name
-      const colorInput = document.getElementById('det-color');
+      const color = document.getElementById('det-color').value.trim();
       const nameInput = document.getElementById('det-name');
-      const color = colorInput.value.trim();
-      const label = sub || (cat === 'top' ? 'Shirt' : 'Pants');
-      nameInput.value = color ? `${color} ${label}` : label;
+      nameInput.value = color ? `${color} ${sub}` : sub;
     }
 
-    // Sync dropdown changes with chips
     document.getElementById('det-category').addEventListener('change', function() {
       highlightGarmentChip(this.value, '');
     });
 
-    function cancelDetection() {
-      pendingFile = null;
+    function cancelScan() {
+      pendingScanFile = null;
       document.getElementById('detect-card').classList.remove('visible');
       document.getElementById('scan-hero').style.display = '';
-      // Reset fields
-      document.getElementById('det-name').value = '';
-      document.getElementById('det-color').value = '';
     }
 
-    async function confirmAdd() {
-      const btn = document.getElementById('btn-confirm');
+    async function saveGarment() {
+      const btn = document.getElementById('btn-save-item');
       btn.disabled = true;
-      btn.textContent = 'Adding...';
+      btn.textContent = 'Saving...';
 
       const formData = new FormData();
+      formData.append('user_id', activeUserId);
       formData.append('name', document.getElementById('det-name').value.trim());
       formData.append('category', document.getElementById('det-category').value);
       formData.append('color', document.getElementById('det-color').value.trim());
       formData.append('weather', document.getElementById('det-weather').value);
-      if (pendingFile) formData.append('image', pendingFile);
+      formData.append('occasion', document.getElementById('det-occasion').value);
+      if (pendingScanFile) formData.append('image', pendingScanFile);
 
       try {
         const res = await fetch('/api/wardrobe', { method: 'POST', body: formData });
         const data = await res.json();
-
         if (data.status === 'ok') {
-          showToast('✅ Added to your wardrobe!', 'success');
-          cancelDetection();
-          loadItems();
+          showToast('Added to wardrobe!', 'success');
+          cancelScan();
+          switchTab('tab-closet');
         } else {
-          showToast(data.error || 'Failed to add item', 'error');
+          showToast(data.error || 'Failed to save', 'error');
         }
       } catch (e) {
-        showToast('Network error — try again', 'error');
+        showToast('Network error', 'error');
       }
 
       btn.disabled = false;
       btn.textContent = 'Add to Wardrobe';
     }
 
-    /* ── Closet / Items ── */
-    document.getElementById('category-tabs').addEventListener('click', function(e) {
-      if (e.target.classList.contains('tab')) {
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        e.target.classList.add('active');
-        activeFilter = e.target.dataset.cat;
-        renderItems();
+    /* ═══════════════════════════════════════════════
+       TAB 3: USERS & FACE ID
+       ═══════════════════════════════════════════════ */
+    async function loadUsers() {
+      try {
+        const res = await fetch('/api/users');
+        const data = await res.json();
+        activeUserId = data.active_user || 'guest';
+
+        const users = data.users || [];
+        document.getElementById('profiles-count').textContent = `${users.length} profile${users.length !== 1 ? 's' : ''}`;
+
+        // Find active user record
+        const activeRec = users.find(u => u.id === activeUserId) || { name: activeUserId, id: activeUserId, preferred_style: 'Casual' };
+        activeUserName = activeRec.name;
+        document.getElementById('top-user-name').textContent = activeRec.name;
+        document.getElementById('top-user-avatar').src = `/avatar/${activeRec.id}`;
+        document.getElementById('banner-user-name').textContent = activeRec.name;
+        document.getElementById('banner-user-avatar').src = `/avatar/${activeRec.id}`;
+        document.getElementById('banner-user-style').textContent = `Style: ${activeRec.preferred_style || 'Casual'} · Mirror synced`;
+
+        // Render user list
+        const container = document.getElementById('users-container');
+        container.innerHTML = users.map(u => {
+          const isCurrent = u.id === activeUserId;
+          const faceBadge = u.has_face
+            ? `<span class="badge-chip has-face">🟢 Face ID Enrolled</span>`
+            : `<span class="badge-chip">⚪ No Face ID</span>`;
+          const countBadge = `<span class="badge-chip">👗 ${u.wardrobe_count || 0} items</span>`;
+          const styleBadge = `<span class="badge-chip">🎨 ${u.preferred_style || 'Casual'}</span>`;
+
+          const switchBtn = isCurrent
+            ? `<button class="btn-switch-user active">Active</button>`
+            : `<button class="btn-switch-user" onclick="switchActiveUser('${u.id}', '${escapeHtml(u.name)}')">Switch</button>`;
+
+          const deleteBtn = (u.id.toLowerCase() !== 'guest' && u.id.toLowerCase() !== 'user1' && u.id.toLowerCase() !== 'user2')
+            ? `<button class="btn-delete-user" onclick="deleteUser('${u.id}')" title="Delete Profile">×</button>`
+            : '';
+
+          return `
+            <div class="user-card ${isCurrent ? 'current' : ''}">
+              <img class="user-card-avatar" src="/avatar/${u.id}" alt="${u.name}" />
+              <div class="user-card-info">
+                <div class="user-card-title">${escapeHtml(u.name)}</div>
+                <div class="user-card-meta">
+                  ${faceBadge}
+                  ${countBadge}
+                  ${styleBadge}
+                </div>
+              </div>
+              <div class="user-card-actions">
+                ${switchBtn}
+                ${deleteBtn}
+              </div>
+            </div>
+          `;
+        }).join('');
+      } catch (err) {
+        console.error('Failed to load users:', err);
       }
+    }
+
+    async function switchActiveUser(userId, name) {
+      try {
+        const res = await fetch('/api/user/active', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, name })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast(`Switched mirror to ${name}!`, 'success');
+          loadUsers();
+          loadWardrobe();
+          loadOutfitRecommendation();
+        }
+      } catch (e) {
+        showToast('Failed to switch user', 'error');
+      }
+    }
+
+    async function deleteUser(userId) {
+      if (!confirm(`Delete profile '${userId}' and all associated face data?`)) return;
+      try {
+        const res = await fetch(`/api/user/delete/${encodeURIComponent(userId)}`, { method: 'POST' });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast('Profile deleted', 'success');
+          loadUsers();
+        } else {
+          showToast(data.error || 'Failed to delete', 'error');
+        }
+      } catch (e) {
+        showToast('Network error', 'error');
+      }
+    }
+
+    function openRegisterModal() {
+      document.getElementById('register-modal').classList.add('open');
+      pendingSelfieFile = null;
+      document.getElementById('selfie-preview').style.display = 'none';
+      document.getElementById('selfie-action-box').style.display = 'block';
+    }
+
+    function closeRegisterModal() {
+      document.getElementById('register-modal').classList.remove('open');
+    }
+
+    function triggerSelfieCapture() {
+      document.getElementById('selfie-file-input').click();
+    }
+
+    document.getElementById('selfie-file-input').addEventListener('change', function() {
+      if (!this.files.length) return;
+      const file = this.files[0];
+      pendingSelfieFile = file;
+
+      const preview = document.getElementById('selfie-preview');
+      preview.src = URL.createObjectURL(file);
+      preview.style.display = 'block';
+      document.getElementById('selfie-action-box').style.display = 'none';
+      this.value = '';
     });
 
-    async function loadItems() {
-      try {
-        const res = await fetch('/api/wardrobe');
-        const data = await res.json();
-        allItems = data.items || [];
-        document.getElementById('item-count').textContent = allItems.length + ' item' + (allItems.length !== 1 ? 's' : '');
-        renderItems();
-      } catch (e) {
-        console.error('Failed to load wardrobe:', e);
-      }
-    }
-
-    function getColorHex(colorName) {
-      if (!colorName) return null;
-      const key = colorName.toLowerCase().trim();
-      return COLOR_MAP[key] || null;
-    }
-
-    function renderItems() {
-      const grid = document.getElementById('items-grid');
-      let filtered = allItems;
-      if (activeFilter !== 'all') {
-        filtered = allItems.filter(i => i.category === activeFilter);
-      }
-
-      if (!filtered.length) {
-        const msg = activeFilter === 'all'
-          ? 'No items yet. Tap the camera button below to scan your first piece!'
-          : `No ${activeFilter} items yet.`;
-        grid.innerHTML = `
-          <div class="empty-state">
-            <div class="empty-icon">${CATEGORY_EMOJI[activeFilter] || '👔'}</div>
-            <p>${msg}</p>
-          </div>
-        `;
+    async function submitRegisterUser() {
+      const name = document.getElementById('reg-name').value.trim();
+      if (!name) {
+        showToast('Please enter a display name', 'error');
         return;
       }
 
-      grid.innerHTML = filtered.map(item => {
-        const imgHtml = item.image_filename
-          ? `<img src="/wardrobe-images/${item.user_id}/${item.image_filename}" alt="${item.name}" loading="lazy" />`
-          : `<div class="no-img">${CATEGORY_EMOJI[item.category] || '👔'}</div>`;
+      const btn = document.getElementById('btn-submit-register');
+      btn.disabled = true;
+      btn.textContent = 'Enrolling Face & Registering...';
 
-        const colorDot = item.color
-          ? `<span class="item-color-dot" style="background:${getColorHex(item.color) || 'var(--ink-dim)'}"></span>`
-          : '';
+      const formData = new FormData();
+      formData.append('name', name);
+      formData.append('preferred_style', document.getElementById('reg-style').value);
+      formData.append('hair_preference', document.getElementById('reg-hair').value.trim());
+      formData.append('switch_now', 'true');
+      if (pendingSelfieFile) formData.append('photo', pendingSelfieFile);
 
-        return `
-          <div class="item-card">
-            ${imgHtml}
-            <div class="item-info">
-              <div class="item-name">${item.name}</div>
-              <div class="item-meta">${colorDot} ${item.category}${item.color ? ' · ' + item.color : ''}</div>
-            </div>
-            <button class="btn-delete" onclick="deleteItem(${item.id})" title="Remove">×</button>
-          </div>
-        `;
-      }).join('');
+      try {
+        const res = await fetch('/api/user/register', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          const msg = data.has_face
+            ? `✨ ${name} enrolled with Face ID!`
+            : `User ${name} registered!`;
+          showToast(msg, 'success');
+          closeRegisterModal();
+          // Reset fields
+          document.getElementById('reg-name').value = '';
+          document.getElementById('reg-hair').value = '';
+          pendingSelfieFile = null;
+          loadUsers();
+        } else {
+          showToast(data.error || 'Failed to register', 'error');
+        }
+      } catch (e) {
+        showToast('Network error registering user', 'error');
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Register Profile';
     }
 
-    async function deleteItem(id) {
-      if (!confirm('Remove this item from your wardrobe?')) return;
+    /* ═══════════════════════════════════════════════
+       TAB 4: REMOTE & TELEMETRY
+       ═══════════════════════════════════════════════ */
+    async function refreshRemoteData() {
       try {
-        await fetch(`/api/wardrobe/${id}`, { method: 'DELETE' });
-        showToast('Item removed', 'success');
-        loadItems();
-      } catch (e) {
-        showToast('Failed to remove item', 'error');
+        const res = await fetch('/api/status');
+        const data = await res.json();
+
+        // 1. Connection status
+        const isOnline = data.system?.camera_status === 'online' || data.sensors?.status === 'online' || true;
+        document.getElementById('remote-conn-dot').className = `status-indicator-dot ${isOnline ? '' : 'offline'}`;
+        document.getElementById('remote-conn-sub').textContent = `Mirror: Online · Active: ${data.user?.name || 'Guest'}`;
+
+        // 2. Privacy Mode
+        const privacyMode = Boolean(data.privacy_mode);
+        document.getElementById('privacy-checkbox').checked = privacyMode;
+        document.getElementById('privacy-card').className = `privacy-toggle-card ${privacyMode ? 'active' : ''}`;
+        document.getElementById('privacy-desc').textContent = privacyMode
+          ? 'Camera & AI analysis PAUSED on mirror'
+          : 'Camera & personal widgets active';
+
+        // 3. ESP32 Hardware Telemetry
+        if (data.sensors) {
+          const s = data.sensors;
+          document.getElementById('telem-temp').textContent = s.temperature !== null && s.temperature !== undefined ? `${s.temperature}°C` : '--°C';
+          document.getElementById('telem-hum').textContent = s.humidity !== null && s.humidity !== undefined ? `${s.humidity}%` : '--%';
+          document.getElementById('telem-light').textContent = s.light !== null && s.light !== undefined ? `${s.light}` : '--';
+          document.getElementById('telem-motion').textContent = s.motion ? 'Active 🚶' : 'Clear';
+          document.getElementById('esp32-status-pill').textContent = s.status === 'online' ? 'ESP32 Online' : 'Mock Mode';
+        }
+
+        // 4. Mirror Stylist Feedback
+        if (data.stylist) {
+          const st = data.stylist;
+          document.getElementById('stylist-score-pill').textContent = st.assessment ? `Harmony ${st.assessment.harmony_score || 90}%` : 'Active';
+          document.getElementById('stylist-advice-text').textContent = st.recommendation?.message || st.stylist_commentary || 'Outfit detected and aligned with current weather.';
+        }
+
+        loadReminders();
+      } catch (err) {
+        console.warn('Status telemetry fetch error:', err);
       }
     }
 
-    /* ── Init ── */
-    loadItems();
+    async function togglePrivacyMode() {
+      try {
+        const res = await fetch('/api/mirror/privacy/toggle', { method: 'POST' });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast(data.privacy_mode ? 'Privacy Mode Activated' : 'Privacy Mode Disabled', 'success');
+          refreshRemoteData();
+        }
+      } catch (e) {
+        showToast('Failed to toggle privacy', 'error');
+      }
+    }
+
+    async function loadReminders() {
+      try {
+        const res = await fetch(`/api/reminders?user_id=${encodeURIComponent(activeUserId)}`);
+        const data = await res.json();
+        const list = data.reminders || [];
+        document.getElementById('reminders-badge').textContent = `${list.length} items`;
+
+        const container = document.getElementById('reminders-list');
+        if (!list.length) {
+          container.innerHTML = `<div style="font-size:0.8rem; color:var(--ink-dim); text-align:center; padding:10px;">No reminders set.</div>`;
+          return;
+        }
+
+        container.innerHTML = list.map(r => `
+          <div class="reminder-item">
+            <div>
+              <span class="reminder-time">${escapeHtml(r.datetime || 'Today')}</span>
+              <span>${escapeHtml(r.title)}</span>
+            </div>
+            <button class="btn-del-reminder" onclick="deleteReminder(${r.id})" title="Delete">×</button>
+          </div>
+        `).join('');
+      } catch (e) {
+        console.warn('Reminders fetch error:', e);
+      }
+    }
+
+    async function addReminder() {
+      const title = document.getElementById('new-reminder-title').value.trim();
+      const timeStr = document.getElementById('new-reminder-time').value.trim();
+      if (!title) {
+        showToast('Please enter a reminder title', 'error');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/reminders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: activeUserId,
+            title: title,
+            datetime: timeStr || ''
+          })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast('Reminder added to mirror!', 'success');
+          document.getElementById('new-reminder-title').value = '';
+          document.getElementById('new-reminder-time').value = '';
+          loadReminders();
+        }
+      } catch (e) {
+        showToast('Failed to add reminder', 'error');
+      }
+    }
+
+    async function deleteReminder(id) {
+      try {
+        await fetch(`/api/reminders/${id}`, { method: 'DELETE' });
+        showToast('Reminder removed', 'success');
+        loadReminders();
+      } catch (e) {
+        showToast('Failed to delete', 'error');
+      }
+    }
+
+    /* ═══════════════════════════════════════════════
+       HELPERS & AUTO-POLLING
+       ═══════════════════════════════════════════════ */
+    function escapeHtml(text) {
+      if (!text) return '';
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    // Auto-poll telemetry when in remote tab (every 4s)
+    setInterval(() => {
+      if (currentTab === 'tab-remote') {
+        refreshRemoteData();
+      }
+    }, 4000);
+
+    // Initial load
+    loadUsers();
+    loadWardrobe();
+    loadOutfitRecommendation();
   </script>
 </body>
 </html>
