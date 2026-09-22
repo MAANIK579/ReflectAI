@@ -124,6 +124,47 @@ class TestMobileAPI(unittest.TestCase):
         res_list2 = self.client.get("/api/reminders?user_id=test_user")
         self.assertEqual(len(res_list2.get_json()["reminders"]), 0)
 
+    def test_face_login_api(self):
+        # 1. Missing photo
+        res_empty = self.client.post("/api/auth/face-login")
+        self.assertEqual(res_empty.status_code, 400)
+        self.assertEqual(res_empty.get_json()["status"], "no_face")
+
+        # 2. Blank image (no face)
+        import cv2, numpy as np
+        blank = np.zeros((100, 100, 3), dtype=np.uint8)
+        _, encoded = cv2.imencode(".jpg", blank)
+        res_blank = self.client.post(
+            "/api/auth/face-login",
+            data={"photo": (io.BytesIO(encoded.tobytes()), "blank.jpg")},
+            content_type="multipart/form-data"
+        )
+        self.assertEqual(res_blank.status_code, 200)
+        self.assertEqual(res_blank.get_json()["status"], "no_face")
+
+        # 3. Registered user face
+        orig_emb = settings.PROJECT_ROOT / "data" / "embeddings" / "maanik.npy"
+        orig_img = settings.PROJECT_ROOT / "data" / "embeddings" / "maanik.jpg"
+        if orig_emb.exists() and orig_img.exists():
+            emb_dir = settings.DATA_DIR / "embeddings"
+            emb_dir.mkdir(parents=True, exist_ok=True)
+            shutil.copy(orig_emb, emb_dir / "maanik.npy")
+            shutil.copy(orig_img, emb_dir / "maanik.jpg")
+            UserRepository.create_or_update("maanik", "MAANIK")
+
+            with open(orig_img, "rb") as f:
+                img_data = f.read()
+
+            res_match = self.client.post(
+                "/api/auth/face-login",
+                data={"photo": (io.BytesIO(img_data), "face.jpg")},
+                content_type="multipart/form-data"
+            )
+            self.assertEqual(res_match.status_code, 200)
+            data = res_match.get_json()
+            self.assertEqual(data["status"], "ok")
+            self.assertEqual(data["user"]["id"], "maanik")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -35,14 +35,29 @@
       </div>
     </section>
 
-    <!-- Top-center: Voice Assistant Overlay -->
+    <!-- Top-center: Voice Concierge & Assistant Overlay -->
     <section class="region top-center" id="voice-overlay" style="display: none;">
-      <div class="voice-indicator">
-        <span class="voice-dot" id="voice-dot"></span>
-        <span id="voice-state-text">Listening...</span>
+      <div class="voice-hud-card">
+        <div class="voice-hud-header">
+          <div class="voice-badge">
+            <span class="voice-badge-icon">🎙️</span>
+            <span class="voice-badge-title" id="voice-badge-title">ReflectAI Concierge</span>
+          </div>
+          <div class="soundwave" id="soundwave-bars">
+            <span class="wave-bar"></span>
+            <span class="wave-bar"></span>
+            <span class="wave-bar"></span>
+            <span class="wave-bar"></span>
+            <span class="wave-bar"></span>
+          </div>
+        </div>
+        <div class="voice-indicator">
+          <span class="voice-dot" id="voice-dot"></span>
+          <span id="voice-state-text">Briefing in progress...</span>
+        </div>
+        <div class="voice-transcript" id="voice-transcript"></div>
+        <div class="voice-reply" id="voice-reply"></div>
       </div>
-      <div class="voice-transcript" id="voice-transcript"></div>
-      <div class="voice-reply" id="voice-reply"></div>
     </section>
 
     <!-- Bottom-left: system status (Phase 2 scope) -->

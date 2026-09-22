@@ -8,11 +8,25 @@ while still handling open-ended small talk naturally.
 
 from datetime import datetime
 
+import os
 import requests
 from llama_cpp import Llama
 
-MODEL_PATH = "qwen2.5-0.5b-instruct-q4_k_m.gguf"
-WEATHER_API_URL = "http://localhost:3000/api/weather"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def get_best_llm_model():
+    candidates = [
+        os.path.join(SCRIPT_DIR, "qwen2.5-3b-instruct-q4_k_m.gguf"),
+        os.path.join(SCRIPT_DIR, "qwen2.5-1.5b-instruct-q4_k_m.gguf"),
+        os.path.join(SCRIPT_DIR, "qwen2.5-0.5b-instruct-q4_k_m.gguf"),
+    ]
+    for c in candidates:
+        if os.path.exists(c) and os.path.getsize(c) > 100 * 1024 * 1024:
+            return c
+    return candidates[-1]
+
+MODEL_PATH = get_best_llm_model()
+WEATHER_API_URL = "http://localhost:5000/api/weather"
 
 
 def get_context_facts():

@@ -5,6 +5,7 @@ Serves the mirror UI and JSON APIs for: status, weather, calendar,
 voice assistant, wardrobe management, and outfit recommendations.
 """
 
+import io
 import json
 import logging
 import os
@@ -14,6 +15,7 @@ import uuid
 
 from flask import Flask, jsonify, render_template, request, send_from_directory, Response
 
+from app.assistant import VoiceConciergeService
 from app.calendar import CalendarService
 from app.config.settings import settings
 from app.database.repositories import (
@@ -45,9 +47,95 @@ def _save_profiles_json(profiles):
     with open(PROFILES_FILE, "w", encoding="utf-8") as f:
         json.dump(profiles, f, indent=2)
 
+def _preprocess_and_detect_faces(img_bytes: bytes):
+    """
+    Robust face detection for smartphone cameras:
+    1. Fixes EXIF orientation (portrait vs landscape) using PIL.
+    2. Resizes giant phone photos to max 960px for optimal YuNet detection.
+    3. If initial orientation detects a face where eyes are above mouth, returns it.
+    4. Otherwise, tests 90° CCW, 90° CW, and 180° rotations.
+    Returns (img_bgr, faces_array).
+    """
+    import cv2
+    import numpy as np
+    from PIL import Image, ImageOps
+
+    if not YUNET_MODEL.exists():
+        return None, None
+
+    try:
+        pil_img = Image.open(io.BytesIO(img_bytes))
+        try:
+            pil_img = ImageOps.exif_transpose(pil_img)
+        except Exception:
+            pass
+        if pil_img.mode != "RGB":
+            pil_img = pil_img.convert("RGB")
+
+        w_orig, h_orig = pil_img.size
+
+        # Multi-scale pyramid: 640px is YuNet's sweet spot for mobile selfies, followed by 480px and 800px
+        for max_d in [640, 480, 800]:
+            scale = max_d / float(max(w_orig, h_orig)) if max(w_orig, h_orig) > max_d else 1.0
+            resized = pil_img.resize((int(w_orig * scale), int(h_orig * scale)), Image.Resampling.BILINEAR) if scale < 1.0 else pil_img
+            base_bgr = cv2.cvtColor(np.array(resized), cv2.COLOR_RGB2BGR)
+
+            rotations = [
+                ("orig", base_bgr),
+                ("90_cw", cv2.rotate(base_bgr, cv2.ROTATE_90_CLOCKWISE)),
+                ("90_ccw", cv2.rotate(base_bgr, cv2.ROTATE_90_COUNTERCLOCKWISE)),
+                ("180", cv2.rotate(base_bgr, cv2.ROTATE_180)),
+            ]
+
+            best_upright = None
+            best_upright_score = -1.0
+            best_any = None
+            best_any_score = -1.0
+
+            for rot_label, candidate in rotations:
+                ch, cw = candidate.shape[:2]
+                det = cv2.FaceDetectorYN.create(
+                    model=str(YUNET_MODEL),
+                    config="",
+                    input_size=(cw, ch),
+                    score_threshold=0.20,
+                    nms_threshold=0.3,
+                    top_k=5000,
+                )
+                _, faces = det.detect(candidate)
+                if faces is not None and len(faces) > 0:
+                    faces_sorted = sorted(faces, key=lambda f: f[2] * f[3], reverse=True)
+                    top_face = faces_sorted[0]
+                    score = float(top_face[14])
+                    eyes_y = (top_face[5] + top_face[7]) / 2.0
+                    mouth_y = (top_face[11] + top_face[13]) / 2.0
+                    if mouth_y > eyes_y and score > best_upright_score:
+                        best_upright_score = score
+                        best_upright = (candidate, faces_sorted, rot_label, score)
+                    if score > best_any_score:
+                        best_any_score = score
+                        best_any = (candidate, faces_sorted, rot_label, score)
+
+            if best_upright is not None:
+                cand, f_list, rot, sc = best_upright
+                logger.info(f"YuNet face detected: {len(f_list)} faces (top score={sc:.3f}, rot={rot}, scale={max_d})")
+                return cand, f_list
+
+        if best_any is not None:
+            cand, f_list, rot, sc = best_any
+            logger.info(f"YuNet face detected (fallback): {len(f_list)} faces (top score={sc:.3f}, rot={rot})")
+            return cand, f_list
+
+        logger.warning("YuNet face detection: no face found across any scale or rotation")
+        return base_bgr, None
+    except Exception as e:
+        logger.error(f"Error in _preprocess_and_detect_faces: {e}")
+        return None, None
+
+
 def _enroll_face(user_id: str, img_bytes: bytes) -> bool:
     """
-    Detects face using YuNet and generates 128-D SFace embedding.
+    Detects face using robust multi-orientation YuNet and generates 128-D SFace embedding.
     Saves:
       - data/embeddings/<user_id>.npy
       - data/embeddings/<user_id>.jpg (cropped face avatar)
@@ -56,53 +144,79 @@ def _enroll_face(user_id: str, img_bytes: bytes) -> bool:
     import numpy as np
 
     EMBEDDINGS_DIR.mkdir(parents=True, exist_ok=True)
-    nparr = np.frombuffer(img_bytes, np.uint8)
-    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-    if img is None:
+    img_bgr, faces = _preprocess_and_detect_faces(img_bytes)
+
+    if img_bgr is None:
         return False
 
-    if not YUNET_MODEL.exists() or not SFACE_MODEL.exists():
-        # Fallback: Save image as avatar even if face recognition models are not present
-        cv2.imwrite(str(EMBEDDINGS_DIR / f"{user_id}.jpg"), img)
+    if not SFACE_MODEL.exists() or faces is None or len(faces) == 0:
+        # Fallback: Save full image as avatar even if face recognition not available
+        cv2.imwrite(str(EMBEDDINGS_DIR / f"{user_id}.jpg"), img_bgr)
         return False
 
     try:
-        h, w = img.shape[:2]
-        detector = cv2.FaceDetectorYN.create(
-            model=str(YUNET_MODEL),
-            config="",
-            input_size=(w, h),
-            score_threshold=0.6,
-            nms_threshold=0.3,
-            top_k=5000,
-        )
         recognizer = cv2.FaceRecognizerSF.create(model=str(SFACE_MODEL), config="")
-
-        detector.setInputSize((w, h))
-        _, faces = detector.detect(img)
-
-        if faces is not None and len(faces) > 0:
-            faces_sorted = sorted(faces, key=lambda f: f[2] * f[3], reverse=True)
-            face = faces_sorted[0]
-            aligned = recognizer.alignCrop(img, face)
-            feat = recognizer.feature(aligned)
-            norm = np.linalg.norm(feat)
-            if norm > 0:
-                feat = feat / norm
-            np.save(str(EMBEDDINGS_DIR / f"{user_id}.npy"), feat)
-            cv2.imwrite(str(EMBEDDINGS_DIR / f"{user_id}.jpg"), aligned)
-            return True
-        else:
-            # No face detected in frame; still save as avatar
-            cv2.imwrite(str(EMBEDDINGS_DIR / f"{user_id}.jpg"), img)
-            return False
+        face = faces[0]
+        aligned = recognizer.alignCrop(img_bgr, face)
+        feat = recognizer.feature(aligned)
+        norm = np.linalg.norm(feat)
+        if norm > 0:
+            feat = feat / norm
+        np.save(str(EMBEDDINGS_DIR / f"{user_id}.npy"), feat)
+        cv2.imwrite(str(EMBEDDINGS_DIR / f"{user_id}.jpg"), aligned)
+        return True
     except Exception as e:
         logger.error(f"Error enrolling face for {user_id}: {e}")
         try:
-            cv2.imwrite(str(EMBEDDINGS_DIR / f"{user_id}.jpg"), img)
+            cv2.imwrite(str(EMBEDDINGS_DIR / f"{user_id}.jpg"), img_bgr)
         except Exception:
             pass
         return False
+
+def _match_face_embedding(feat) -> tuple:
+    """
+    Compares feat with all registered embeddings in EMBEDDINGS_DIR.
+    Returns (best_user_id, best_score).
+    """
+    import cv2
+    import numpy as np
+
+    if not EMBEDDINGS_DIR.exists():
+        return None, 0.0
+
+    recognizer = None
+    if SFACE_MODEL.exists():
+        try:
+            recognizer = cv2.FaceRecognizerSF.create(model=str(SFACE_MODEL), config="")
+        except Exception:
+            recognizer = None
+
+    best_id = None
+    best_score = 0.0
+    COSINE_THRESHOLD = 0.363
+
+    for fname in os.listdir(EMBEDDINGS_DIR):
+        if fname.endswith(".npy"):
+            uid = fname[:-4]
+            try:
+                ref_emb = np.load(str(EMBEDDINGS_DIR / fname))
+                if recognizer is not None:
+                    score = float(recognizer.match(feat, ref_emb, cv2.FaceRecognizerSF_FR_COSINE))
+                else:
+                    norm_q = np.linalg.norm(feat)
+                    norm_r = np.linalg.norm(ref_emb)
+                    if norm_q > 0 and norm_r > 0:
+                        score = float(np.dot(feat, ref_emb) / (norm_q * norm_r))
+                    else:
+                        score = 0.0
+
+                if score >= COSINE_THRESHOLD and score > best_score:
+                    best_score = score
+                    best_id = uid
+            except Exception as e:
+                logger.warning(f"Error matching embedding {fname}: {e}")
+
+    return best_id, best_score
 
 _live_stylist_state = {}
 _live_grooming_state = {}
@@ -134,6 +248,82 @@ _voice_state = {
     "reply": ""
 }
 
+_last_motion_time = None
+_last_user_greet_time = {}
+GREETING_COOLDOWN_SECONDS = 600  # 10 minutes between automatic greetings for the same user
+
+
+def _trigger_auto_greeting_if_eligible(user_id: str, trigger_source: str = "camera") -> bool:
+    """
+    Checks motion sensor presence and recognized face to automatically deliver a
+    personalized voice greeting & morning briefing to that specific user on the Smart Mirror.
+    """
+    global _last_user_greet_time
+    if not user_id or user_id.lower() == "guest":
+        return False
+
+    # 1. Privacy check
+    privacy_mode = SettingsRepository.get("privacy_mode", default="false") == "true"
+    if privacy_mode:
+        logger.info(f"Auto-greeting skipped for {user_id}: Privacy mode is active.")
+        return False
+
+    # 2. Setting toggle check
+    auto_enabled = SettingsRepository.get("auto_greeting_enabled", default="true") == "true"
+    if not auto_enabled:
+        logger.info(f"Auto-greeting skipped for {user_id}: Auto greeting disabled in settings.")
+        return False
+
+    # 3. Cooldown check
+    now = time.time()
+    last_greet = _last_user_greet_time.get(user_id, 0)
+    if (now - last_greet) < GREETING_COOLDOWN_SECONDS:
+        logger.info(f"Auto-greeting cooldown active for {user_id} ({int(now - last_greet)}s < {GREETING_COOLDOWN_SECONDS}s).")
+        return False
+
+    # 4. Motion sensor check:
+    # If ESP32 is online, verify motion was detected recently (<90s) or is active now.
+    is_esp32_online = (
+        _esp32_state["last_seen"] is not None and
+        (now - _esp32_state["last_seen"]) < 20
+    )
+    if is_esp32_online and not settings.ESP32_MOCK_MODE:
+        motion_active = bool(_esp32_state.get("motion"))
+        recent_motion = (_last_motion_time is not None and (now - _last_motion_time) < 90)
+        if not (motion_active or recent_motion):
+            logger.info(f"Auto-greeting for {user_id} waiting for motion sensor detection.")
+            return False
+
+    if _voice_state.get("state") == "speaking":
+        return False
+
+    _last_user_greet_time[user_id] = now
+    logger.info(f"🎉 Triggering auto voice greeting for recognized user '{user_id}' (source: {trigger_source})")
+
+    briefing = VoiceConciergeService.build_briefing(
+        user_id=user_id,
+        esp32_data=_esp32_state,
+        stylist_data=_live_stylist_state.get(user_id),
+        grooming_data=_live_grooming_state.get(user_id),
+    )
+    text = briefing.get("full_text", "")
+
+    def on_start(t):
+        _voice_state["state"] = "speaking"
+        _voice_state["text"] = "Voice Concierge Welcome"
+        _voice_state["reply"] = t
+
+    def on_finish():
+        _voice_state["state"] = "idle"
+        _voice_state["text"] = ""
+        _voice_state["reply"] = ""
+
+    VoiceConciergeService.play_on_mirror_async(
+        text, user_id=user_id, on_start=on_start, on_finish=on_finish
+    )
+    return True
+
+
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -152,6 +342,102 @@ def voice_event():
     _voice_state["text"] = data.get("text", "")
     _voice_state["reply"] = data.get("reply", "")
     return jsonify({"status": "ok"})
+
+
+@app.route("/api/voice/briefing")
+def voice_briefing():
+    """
+    Generates a personalized daily briefing for the specified or active user.
+    """
+    user_id = request.args.get("user_id")
+    if not user_id:
+        user_id = SettingsRepository.get("active_user", default="guest")
+
+    briefing = VoiceConciergeService.build_briefing(
+        user_id=user_id,
+        esp32_data=_esp32_state,
+        stylist_data=_live_stylist_state.get(user_id),
+        grooming_data=_live_grooming_state.get(user_id),
+    )
+    return jsonify(briefing)
+
+
+@app.route("/api/voice/briefing/play", methods=["POST"])
+def voice_briefing_play():
+    """
+    Triggers briefing playback on the Smart Mirror speakers, or updates state for phone stream.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    user_id = data.get("user_id") or SettingsRepository.get("active_user", default="guest")
+    target = data.get("target", "mirror")
+
+    briefing = VoiceConciergeService.build_briefing(
+        user_id=user_id,
+        esp32_data=_esp32_state,
+        stylist_data=_live_stylist_state.get(user_id),
+        grooming_data=_live_grooming_state.get(user_id),
+    )
+    text = briefing.get("full_text", "")
+
+    if target == "mirror":
+        def on_start(t):
+            _voice_state["state"] = "speaking"
+            _voice_state["text"] = "Voice Concierge Briefing"
+            _voice_state["reply"] = t
+
+        def on_finish():
+            _voice_state["state"] = "idle"
+            _voice_state["text"] = ""
+            _voice_state["reply"] = ""
+
+        VoiceConciergeService.play_on_mirror_async(
+            text, user_id=user_id, on_start=on_start, on_finish=on_finish
+        )
+        return jsonify({"status": "ok", "target": "mirror", "briefing": briefing})
+    else:
+        return jsonify({"status": "ok", "target": "phone", "briefing": briefing})
+
+
+@app.route("/api/voice/briefing/audio")
+def voice_briefing_audio():
+    """
+    Synthesizes and streams WAV audio of the daily briefing for in-browser phone playback.
+    """
+    user_id = request.args.get("user_id")
+    if not user_id:
+        user_id = SettingsRepository.get("active_user", default="guest")
+
+    briefing = VoiceConciergeService.build_briefing(
+        user_id=user_id,
+        esp32_data=_esp32_state,
+        stylist_data=_live_stylist_state.get(user_id),
+        grooming_data=_live_grooming_state.get(user_id),
+    )
+    text = briefing.get("full_text", "Welcome to ReflectAI.")
+    wav_bytes = VoiceConciergeService.synthesize_to_wav(text)
+
+    return Response(
+        wav_bytes,
+        mimetype="audio/wav",
+        headers={
+            "Content-Disposition": "inline; filename=briefing.wav",
+            "Content-Length": str(len(wav_bytes)),
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+        }
+    )
+
+
+@app.route("/api/voice/stop", methods=["POST"])
+def voice_stop():
+    """
+    Halts any active audio playback on mirror speakers and resets voice state.
+    """
+    VoiceConciergeService.stop_playback()
+    _voice_state["state"] = "idle"
+    _voice_state["text"] = ""
+    _voice_state["reply"] = ""
+    return jsonify({"status": "ok", "message": "Voice playback stopped"})
+
 
 
 @app.route("/api/user/active", methods=["POST"])
@@ -183,7 +469,10 @@ def set_active_user():
     SettingsRepository.set("active_user", user_id)
     logger.info(f"Active user switched to: {user_id}")
 
-    return jsonify({"status": "ok", "active_user": user_id})
+    # Auto-greet recognized face if motion is confirmed
+    greeted = _trigger_auto_greeting_if_eligible(user_id, trigger_source="face_recognition")
+
+    return jsonify({"status": "ok", "active_user": user_id, "greeted": greeted})
 
 
 @app.route("/api/esp32/state", methods=["POST"])
@@ -194,7 +483,7 @@ def esp32_state():
     - Privacy mode toggle
     - Sensors: DHT22 (temp, humidity), LDR (light), PIR (motion)
     """
-    global _last_esp32_user, _last_esp32_privacy
+    global _last_esp32_user, _last_esp32_privacy, _last_motion_time
     data = request.get_json(force=True, silent=True) or {}
 
     # 1. Update active user ONLY when an ESP32 physical button is actually pressed
@@ -228,8 +517,16 @@ def esp32_state():
     _esp32_state["temperature"] = data.get("temperature")
     _esp32_state["humidity"] = data.get("humidity")
     _esp32_state["light"] = data.get("light")
-    _esp32_state["motion"] = bool(data.get("motion", False))
+    motion_val = bool(data.get("motion", False))
+    _esp32_state["motion"] = motion_val
     _esp32_state["last_seen"] = time.time()
+
+    if motion_val:
+        _last_motion_time = time.time()
+        # If camera has recently seen a registered user (within last 45s), greet them!
+        active_user = SettingsRepository.get("active_user", default="guest")
+        if active_user and active_user.lower() != "guest" and _last_camera_seen and (time.time() - _last_camera_seen) < 45:
+            _trigger_auto_greeting_if_eligible(active_user, trigger_source="motion_sensor")
 
     current_active = SettingsRepository.get("active_user", default="guest")
     return jsonify({
@@ -516,6 +813,82 @@ def wardrobe_image(user_id, filename):
 
 
 # ── User Profile & Facial Enrollment API ─────────────────────
+
+@app.route("/api/auth/face-login", methods=["POST"])
+def api_face_login():
+    """
+    Authenticates a user via face scan from their phone.
+    Returns:
+      - status: 'ok', user: {...}, score: float (if recognized)
+      - status: 'not_registered', message: '...' (if face detected but not recognized)
+      - status: 'no_face', message: '...' (if no face detected in image)
+    """
+    import cv2
+    import numpy as np
+
+    image_file = request.files.get("photo") or request.files.get("image")
+    if not image_file or not image_file.filename:
+        return jsonify({"status": "no_face", "error": "No face image provided"}), 400
+
+    img_bytes = image_file.read()
+    img_bgr, faces = _preprocess_and_detect_faces(img_bytes)
+
+    if img_bgr is None:
+        return jsonify({"status": "no_face", "error": "Could not process image"}), 400
+
+    if faces is None or len(faces) == 0:
+        return jsonify({
+            "status": "no_face",
+            "message": "No face detected in photo. Please ensure good lighting, look directly into the camera, and try again."
+        }), 200
+
+    if not SFACE_MODEL.exists():
+        return jsonify({
+            "status": "error",
+            "error": "Face recognition models not found on server"
+        }), 500
+
+    try:
+        recognizer = cv2.FaceRecognizerSF.create(model=str(SFACE_MODEL), config="")
+        face = faces[0]
+        aligned = recognizer.alignCrop(img_bgr, face)
+        feat = recognizer.feature(aligned)
+        norm = np.linalg.norm(feat)
+        if norm > 0:
+            feat = feat / norm
+
+        matched_user_id, match_score = _match_face_embedding(feat)
+
+        if matched_user_id:
+            user = UserRepository.get(matched_user_id) or {"name": matched_user_id.replace("_", " ").title()}
+            SettingsRepository.set("active_user", matched_user_id)
+            logger.info(f"Face ID login successful for: {matched_user_id} (score={match_score:.3f})")
+
+            # Check and trigger auto greeting on mirror
+            _trigger_auto_greeting_if_eligible(matched_user_id, trigger_source="face_login")
+
+            return jsonify({
+                "status": "ok",
+                "user": {
+                    "id": matched_user_id,
+                    "name": user["name"],
+                    "preferred_style": user.get("preferred_style") or "Casual",
+                    "avatar_url": f"/avatar/{matched_user_id}",
+                },
+                "score": float(match_score),
+                "message": f"Welcome back, {user['name']}!"
+            }), 200
+        else:
+            logger.info(f"Face login: face detected but not recognized as any registered profile (best match score={match_score:.3f})")
+            return jsonify({
+                "status": "not_registered",
+                "message": "Face detected, but you are not registered in ReflectAI yet. Please register your profile first."
+            }), 200
+
+    except Exception as e:
+        logger.error(f"Face login error: {e}")
+        return jsonify({"status": "error", "error": f"Face recognition failed: {str(e)}"}), 500
+
 
 @app.route("/api/users")
 def api_users_list():

@@ -24,7 +24,18 @@ import requests
 import sounddevice as sd
 from llama_cpp import Llama
 from openwakeword.model import Model
-from vosk import KaldiRecognizer, Model as VoskModel
+
+try:
+    from faster_whisper import WhisperModel
+    _HAS_WHISPER = True
+except ImportError:
+    _HAS_WHISPER = False
+
+try:
+    from vosk import KaldiRecognizer, Model as VoskModel
+    _HAS_VOSK = True
+except ImportError:
+    _HAS_VOSK = False
 
 import os
 
@@ -38,7 +49,29 @@ WAKE_THRESHOLD = 0.5
 WAKE_WORD_MODEL = "hey_jarvis"
 
 VOSK_MODEL_PATH = os.path.join(SCRIPT_DIR, "model")
-LLM_MODEL_PATH = os.path.join(SCRIPT_DIR, "qwen2.5-0.5b-instruct-q4_k_m.gguf")
+
+def get_best_llm_model():
+    """
+    Selects the highest capability model available in voice_engine:
+    1. Qwen 2.5 - 3B (if present)
+    2. Qwen 2.5 - 1.5B (optimal for Pi 4 4GB & PC)
+    3. Qwen 2.5 - 0.5B (fallback)
+    """
+    custom = os.getenv("LLM_MODEL_PATH")
+    if custom and os.path.exists(custom):
+        return custom
+
+    candidates = [
+        os.path.join(SCRIPT_DIR, "qwen2.5-3b-instruct-q4_k_m.gguf"),
+        os.path.join(SCRIPT_DIR, "qwen2.5-1.5b-instruct-q4_k_m.gguf"),
+        os.path.join(SCRIPT_DIR, "qwen2.5-0.5b-instruct-q4_k_m.gguf"),
+    ]
+    for c in candidates:
+        if os.path.exists(c) and os.path.getsize(c) > 100 * 1024 * 1024:
+            return c
+    return candidates[-1]
+
+LLM_MODEL_PATH = get_best_llm_model()
 WEATHER_API_URL = "http://localhost:5000/api/weather"
 VOICE_EVENT_URL = "http://localhost:5000/api/voice/event"
 ACTIVE_USER_URL = "http://localhost:5000/api/status"  # we use /api/status now to get active user and schedule
@@ -95,8 +128,26 @@ print("Loading models... (this can take a bit)")
 
 oww_model = Model(wakeword_models=[WAKE_WORD_MODEL], inference_framework="onnx")
 print(f"  Wake word model: {WAKE_WORD_MODEL}")
-vosk_model = VoskModel(VOSK_MODEL_PATH)
+
+# Speech-to-Text: Faster-Whisper (with Vosk fallback)
+whisper_model = None
+vosk_model = None
+use_whisper = False
+
+if _HAS_WHISPER:
+    try:
+        whisper_model = WhisperModel("base.en", device="cpu", compute_type="int8")
+        use_whisper = True
+        print("  STT Engine: Faster-Whisper (base.en, int8)")
+    except Exception as e:
+        print(f"  Faster-Whisper init failed ({e}), falling back to Vosk...")
+
+if not use_whisper and _HAS_VOSK and os.path.exists(VOSK_MODEL_PATH):
+    vosk_model = VoskModel(VOSK_MODEL_PATH)
+    print("  STT Engine: Vosk")
+
 llm = Llama(model_path=LLM_MODEL_PATH, n_ctx=1024, n_threads=4, verbose=False)
+print(f"  LLM Model: {os.path.basename(LLM_MODEL_PATH)}")
 
 audio_queue = queue.Queue()
 
@@ -225,7 +276,7 @@ def ask_llm(user_text):
                 {"role": "system", "content": build_system_prompt()},
                 {"role": "user", "content": user_text},
             ],
-            max_tokens=80,
+            max_tokens=120,
             temperature=0.7,
         )
         return response["choices"][0]["message"]["content"].strip()
@@ -235,11 +286,30 @@ def ask_llm(user_text):
 
 
 def transcribe(raw_frames):
-    recognizer = KaldiRecognizer(vosk_model, SAMPLE_RATE)
-    for chunk in raw_frames:
-        recognizer.AcceptWaveform(chunk)
-    result = json.loads(recognizer.FinalResult())
-    return result.get("text", "")
+    if not raw_frames:
+        return ""
+
+    if use_whisper and whisper_model is not None:
+        try:
+            raw_bytes = b"".join(raw_frames)
+            audio_int16 = np.frombuffer(raw_bytes, dtype=np.int16)
+            audio_float32 = audio_int16.astype(np.float32) / 32768.0
+            segments, _ = whisper_model.transcribe(audio_float32, beam_size=1, language="en")
+            text = " ".join(s.text for s in segments).strip()
+            if text:
+                return text
+        except Exception as e:
+            print(f"Faster-Whisper transcription error: {e}")
+
+    # Fallback to Vosk
+    if vosk_model is not None:
+        recognizer = KaldiRecognizer(vosk_model, SAMPLE_RATE)
+        for chunk in raw_frames:
+            recognizer.AcceptWaveform(chunk)
+        result = json.loads(recognizer.FinalResult())
+        return result.get("text", "")
+
+    return ""
 
 
 def handle_command(text):

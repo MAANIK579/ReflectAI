@@ -5,3 +5,4 @@ onnxruntime
 numpy
 requests
 llama-cpp-python
+faster-whisper

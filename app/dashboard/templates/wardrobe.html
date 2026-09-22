@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>ReflectAI — Mobile Companion</title>
+  <title>ReflectAI — Smart Wardrobe & Face ID</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -13,24 +13,22 @@
       --surface: #141417;
       --surface-2: #1e1e24;
       --surface-3: #272730;
-      --glass: rgba(18, 18, 22, 0.88);
-      --glass-card: rgba(26, 26, 32, 0.7);
+      --glass: rgba(18, 18, 22, 0.92);
       --ink: #f8fafc;
       --ink-dim: #94a3b8;
       --ink-faint: #64748b;
       --ember: #f59e0b;
       --ember-light: #fbbf24;
-      --ember-glow: rgba(245, 158, 11, 0.22);
+      --ember-glow: rgba(245, 158, 11, 0.25);
       --ember-gradient: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
       --ok: #10b981;
-      --ok-glow: rgba(16, 185, 129, 0.2);
-      --info: #3b82f6;
+      --ok-glow: rgba(16, 185, 129, 0.25);
       --danger: #ef4444;
-      --danger-glow: rgba(239, 68, 68, 0.2);
+      --danger-glow: rgba(239, 68, 68, 0.25);
       --border: rgba(255, 255, 255, 0.08);
       --border-light: rgba(255, 255, 255, 0.04);
-      --border-active: rgba(245, 158, 11, 0.4);
-      --radius-xl: 20px;
+      --border-active: rgba(245, 158, 11, 0.45);
+      --radius-xl: 22px;
       --radius: 16px;
       --radius-sm: 12px;
       --radius-xs: 8px;
@@ -58,28 +56,277 @@
       display: flex;
       flex-direction: column;
       position: relative;
-      background: radial-gradient(circle at 50% 0%, rgba(245, 158, 11, 0.05) 0%, transparent 60%);
     }
 
-    /* ── Views ── */
-    .view {
+    /* ── Toast Notifications ── */
+    .toast-msg {
+      position: fixed;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-100px);
+      max-width: 380px;
+      width: calc(100% - 32px);
+      padding: 12px 16px;
+      border-radius: var(--radius-sm);
+      font-size: 0.85rem;
+      font-weight: 500;
+      text-align: center;
+      z-index: 500;
+      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+    .toast-msg.visible { transform: translateX(-50%) translateY(0); }
+    .toast-msg.success { background: rgba(16, 185, 129, 0.25); border: 1px solid var(--ok); color: #a7f3d0; }
+    .toast-msg.error { background: rgba(239, 68, 68, 0.25); border: 1px solid var(--danger); color: #fecaca; }
+
+    /* ═══════════════════════════════════════════════
+       STAGE 1: LOGIN & AUTH GATEWAY (ONLY SCREEN SHOWN INITIALLY)
+       ═══════════════════════════════════════════════ */
+    .gate-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      min-height: 100dvh;
+      padding: calc(30px + var(--safe-top)) 20px calc(30px + var(--safe-bottom));
+      position: relative;
+      background: radial-gradient(circle at 50% 25%, rgba(245, 158, 11, 0.1) 0%, transparent 65%);
+    }
+    .gate-screen.hidden { display: none !important; }
+
+    .gate-brand {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .gate-logo {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      background: var(--ember-gradient);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: #000;
+      margin: 0 auto 12px;
+      box-shadow: 0 4px 24px var(--ember-glow);
+    }
+    .gate-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .gate-title span { color: var(--ember); }
+    .gate-subtitle {
+      font-size: 0.85rem;
+      color: var(--ink-dim);
+      margin-top: 6px;
+      max-width: 310px;
+      line-height: 1.45;
+    }
+
+    /* Biometric Radar Box */
+    .biometric-box {
+      position: relative;
+      width: 200px;
+      height: 200px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+      cursor: pointer;
+    }
+    .biometric-box:active { transform: scale(0.97); }
+    .biometric-ring {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 3px dashed var(--ember);
+      opacity: 0.65;
+      animation: rotateRing 20s linear infinite;
+    }
+    @keyframes rotateRing { to { transform: rotate(360deg); } }
+    .biometric-box.scanning .biometric-ring {
+      border: 3px solid var(--ember);
+      animation: pulseScan 1.2s ease-in-out infinite, rotateRing 6s linear infinite;
+    }
+    .biometric-box.success .biometric-ring {
+      border: 3px solid var(--ok);
+      opacity: 1;
+      box-shadow: 0 0 28px var(--ok-glow);
+    }
+    .biometric-box.failed .biometric-ring {
+      border: 3px solid var(--danger);
+      opacity: 1;
+      box-shadow: 0 0 28px var(--danger-glow);
+    }
+    @keyframes pulseScan {
+      0%, 100% { transform: scale(1); opacity: 0.8; }
+      50% { transform: scale(1.08); opacity: 0.3; }
+    }
+    .biometric-inner {
+      width: 160px;
+      height: 160px;
+      border-radius: 50%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 6px 32px rgba(0,0,0,0.6);
+    }
+    .scan-laser-line {
+      display: none;
+      position: absolute;
+      left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, transparent, var(--ember), transparent);
+      box-shadow: 0 0 14px var(--ember);
+      animation: sweepLaser 1.5s ease-in-out infinite alternate;
+    }
+    .biometric-box.scanning .scan-laser-line { display: block; }
+    @keyframes sweepLaser {
+      0% { top: 12%; }
+      100% { top: 88%; }
+    }
+    .biometric-icon { font-size: 3.4rem; }
+    .biometric-avatar-preview {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: none;
+    }
+
+    .biometric-status {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--ember);
+      text-align: center;
+      min-height: 24px;
+      margin-bottom: 20px;
+    }
+
+    /* Scan Action Button */
+    .btn-gate-scan {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      max-width: 320px;
+      padding: 14px 20px;
+      background: var(--ember);
+      color: #000;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 1rem;
+      font-weight: 700;
+      border: none;
+      border-radius: var(--radius);
+      cursor: pointer;
+      box-shadow: 0 4px 20px var(--ember-glow);
+      transition: all 0.15s;
+    }
+    .btn-gate-scan:active { transform: scale(0.97); }
+
+    .btn-gate-quick {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      max-width: 320px;
+      padding: 12px 20px;
+      border-radius: var(--radius-sm);
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--ink);
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 10px;
+      transition: all 0.2s ease;
+    }
+    .btn-gate-quick:active { transform: scale(0.97); background: var(--surface-3); }
+
+    /* Alert Boxes */
+    .gate-alert-card {
+      display: none;
+      width: 100%;
+      max-width: 340px;
+      border-radius: var(--radius-sm);
+      padding: 14px;
+      text-align: center;
+      margin-bottom: 16px;
+      animation: fadeIn 0.25s ease-out;
+    }
+    .gate-alert-card.unregistered {
+      display: block;
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px solid var(--border-active);
+    }
+    .gate-alert-card.noface {
+      display: block;
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.35);
+    }
+    .gate-alert-title { font-size: 0.92rem; font-weight: 600; margin-bottom: 4px; }
+    .gate-alert-desc { font-size: 0.78rem; color: var(--ink-dim); line-height: 1.45; margin-bottom: 12px; }
+    .btn-alert-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--ember);
+      color: #000;
+      font-size: 0.84rem;
+      font-weight: 700;
+      padding: 9px 18px;
+      border-radius: 20px;
+      border: none;
+      cursor: pointer;
+    }
+
+    /* Fallback profile picker */
+    .gate-footer-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      margin-top: 20px;
+      width: 100%;
+      max-width: 320px;
+    }
+    .gate-link {
+      font-size: 0.8rem;
+      color: var(--ink-dim);
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 4px;
+    }
+
+    /* ═══════════════════════════════════════════════
+       STAGE 2: MAIN DASHBOARD APP (SHOWN ONLY AFTER LOGIN)
+       ═══════════════════════════════════════════════ */
+    .dashboard-app {
       display: none;
       flex-direction: column;
-      flex: 1;
-      padding: 0 16px;
-      padding-top: calc(12px + var(--safe-top));
-      padding-bottom: calc(88px + var(--safe-bottom));
-      animation: fadeIn 0.2s ease-out;
+      min-height: 100vh;
+      min-height: 100dvh;
+      position: relative;
     }
-    .view.active { display: flex; }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    .dashboard-app.visible { display: flex !important; }
 
-    /* ── App Top Header ── */
+    /* Top Navigation Bar */
     .top-bar {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 12px 4px 16px;
+      padding: 12px 16px 14px;
       position: sticky;
       top: 0;
       z-index: 20;
@@ -87,11 +334,7 @@
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
     }
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
+    .brand { display: flex; align-items: center; gap: 8px; }
     .brand-logo {
       width: 28px;
       height: 28px;
@@ -113,7 +356,11 @@
     }
     .brand-title span { color: var(--ember); }
 
-    /* Active User Pill in Header */
+    .header-user-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
     .active-user-pill {
       display: flex;
       align-items: center;
@@ -122,10 +369,7 @@
       border: 1px solid var(--border);
       padding: 4px 10px 4px 6px;
       border-radius: 20px;
-      cursor: pointer;
-      transition: all 0.2s ease;
     }
-    .active-user-pill:active { transform: scale(0.96); border-color: var(--ember); }
     .active-user-avatar {
       width: 22px;
       height: 22px;
@@ -135,18 +379,35 @@
     }
     .active-user-name {
       font-size: 0.78rem;
-      font-weight: 500;
+      font-weight: 600;
       color: var(--ink);
     }
-    .live-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--ok);
-      box-shadow: 0 0 6px var(--ok);
+    .btn-logout {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--ink-dim);
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 5px 9px;
+      border-radius: 14px;
+      cursor: pointer;
     }
+    .btn-logout:active { background: var(--surface-3); color: var(--danger); }
 
-    /* Section Subheadings */
+    /* Views */
+    .view {
+      display: none;
+      flex-direction: column;
+      flex: 1;
+      padding: 0 16px;
+      padding-top: calc(8px + var(--safe-top));
+      padding-bottom: calc(88px + var(--safe-bottom));
+      animation: fadeIn 0.2s ease-out;
+    }
+    .view.active { display: flex; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* Section Headers */
     .section-header {
       display: flex;
       align-items: center;
@@ -157,7 +418,6 @@
       font-family: 'Space Grotesk', sans-serif;
       font-size: 0.92rem;
       font-weight: 600;
-      letter-spacing: -0.01em;
       text-transform: uppercase;
       color: var(--ink-dim);
     }
@@ -170,118 +430,6 @@
       font-weight: 500;
     }
 
-    /* ═══════════════════════════════════════════════
-       TAB 1: CLOSET & OUTFIT RECOMMENDATION
-       ═══════════════════════════════════════════════ */
-
-    /* Outfit Recommendation Hero Card */
-    .outfit-hero {
-      background: linear-gradient(135deg, rgba(30,30,38,0.95) 0%, rgba(20,20,26,0.95) 100%);
-      border: 1px solid var(--border-active);
-      border-radius: var(--radius-xl);
-      padding: 16px;
-      margin-bottom: 16px;
-      position: relative;
-      overflow: hidden;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-    }
-    .outfit-hero::before {
-      content: '';
-      position: absolute;
-      top: -30px;
-      right: -30px;
-      width: 100px;
-      height: 100px;
-      background: radial-gradient(circle, var(--ember-glow) 0%, transparent 70%);
-      pointer-events: none;
-    }
-    .outfit-top-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 12px;
-    }
-    .outfit-tag {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      background: var(--ember-glow);
-      color: var(--ember);
-      font-size: 0.72rem;
-      font-weight: 600;
-      padding: 3px 9px;
-      border-radius: 14px;
-      letter-spacing: 0.02em;
-    }
-    .outfit-weather-pill {
-      font-size: 0.75rem;
-      color: var(--ink-dim);
-      background: var(--surface-2);
-      padding: 3px 8px;
-      border-radius: 10px;
-      border: 1px solid var(--border-light);
-    }
-    .outfit-pieces-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 8px;
-      margin-bottom: 12px;
-    }
-    .outfit-piece-card {
-      background: var(--surface-2);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      padding: 8px 6px;
-      text-align: center;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 4px;
-    }
-    .piece-img {
-      width: 100%;
-      height: 58px;
-      object-fit: cover;
-      border-radius: 6px;
-      background: var(--bg);
-    }
-    .piece-icon-fallback {
-      width: 100%;
-      height: 58px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.6rem;
-      background: var(--surface-3);
-      border-radius: 6px;
-    }
-    .piece-cat {
-      font-size: 0.65rem;
-      color: var(--ink-faint);
-      text-transform: uppercase;
-      font-weight: 600;
-    }
-    .piece-name {
-      font-size: 0.72rem;
-      font-weight: 500;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 100%;
-    }
-    .outfit-reason-box {
-      font-size: 0.78rem;
-      color: var(--ink-dim);
-      line-height: 1.4;
-      background: rgba(0,0,0,0.3);
-      padding: 8px 10px;
-      border-radius: var(--radius-xs);
-      border-left: 2px solid var(--ember);
-      display: flex;
-      align-items: flex-start;
-      gap: 6px;
-    }
-
     /* Category Filter Tabs */
     .tabs-bar {
       display: flex;
@@ -289,7 +437,6 @@
       overflow-x: auto;
       scrollbar-width: none;
       padding: 4px 2px 14px;
-      margin-bottom: 2px;
     }
     .tabs-bar::-webkit-scrollbar { display: none; }
     .cat-tab {
@@ -302,7 +449,6 @@
       font-weight: 500;
       white-space: nowrap;
       cursor: pointer;
-      transition: all 0.2s;
     }
     .cat-tab.active {
       background: var(--ember);
@@ -324,874 +470,465 @@
       border-radius: var(--radius);
       overflow: hidden;
       position: relative;
-      transition: transform 0.15s ease, border-color 0.2s;
     }
-    .wardrobe-card:active { transform: scale(0.98); }
     .card-photo-wrap {
       width: 100%;
       height: 145px;
       position: relative;
       background: var(--surface-2);
     }
-    .card-photo {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
-    }
+    .card-photo { width: 100%; height: 100%; object-fit: cover; display: block; }
     .card-no-photo {
-      width: 100%;
-      height: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 2.6rem;
-      color: var(--ink-faint);
+      width: 100%; height: 100%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 2.6rem; color: var(--ink-faint);
     }
     .card-del-btn {
-      position: absolute;
-      top: 6px;
-      right: 6px;
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      background: rgba(10,10,10,0.7);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-      border: 1px solid rgba(239, 68, 68, 0.4);
-      color: var(--danger);
-      font-size: 1rem;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      position: absolute; top: 6px; right: 6px;
+      width: 28px; height: 28px; border-radius: 50%;
+      background: rgba(10,10,10,0.7); backdrop-filter: blur(8px);
+      border: 1px solid rgba(239, 68, 68, 0.4); color: var(--danger);
+      font-size: 1rem; display: flex; align-items: center; justify-content: center;
       cursor: pointer;
-      transition: all 0.15s;
     }
-    .card-del-btn:active { transform: scale(0.9); background: var(--danger); color: #fff; }
-    .card-content {
-      padding: 10px 12px 12px;
-    }
+    .card-content { padding: 10px 12px 12px; }
     .card-name {
-      font-size: 0.84rem;
-      font-weight: 600;
-      margin-bottom: 4px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      font-size: 0.84rem; font-weight: 600; margin-bottom: 4px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .card-meta-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 0.72rem;
-      color: var(--ink-dim);
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 0.72rem; color: var(--ink-dim);
     }
-    .card-color-tag {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      text-transform: capitalize;
-    }
-    .color-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      border: 1px solid var(--border);
-    }
+    .card-color-tag { display: inline-flex; align-items: center; gap: 5px; text-transform: capitalize; }
+    .color-dot { width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--border); }
     .card-weather-tag {
-      font-size: 0.68rem;
-      background: var(--surface-2);
-      padding: 1px 6px;
-      border-radius: 6px;
-      color: var(--ink-faint);
+      font-size: 0.68rem; background: var(--surface-2); padding: 1px 6px;
+      border-radius: 6px; color: var(--ink-faint);
     }
-
-    /* Empty State */
     .empty-state {
-      grid-column: 1 / -1;
-      text-align: center;
-      padding: 48px 16px;
-      color: var(--ink-dim);
+      grid-column: 1 / -1; text-align: center; padding: 48px 16px; color: var(--ink-dim);
     }
     .empty-state-icon { font-size: 3rem; margin-bottom: 12px; opacity: 0.7; }
     .empty-state-title { font-family: 'Space Grotesk', sans-serif; font-size: 1.1rem; color: var(--ink); margin-bottom: 6px; }
     .empty-state-p { font-size: 0.85rem; line-height: 1.4; margin-bottom: 16px; }
     .btn-cta-scan {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      background: var(--ember);
-      color: #000;
-      padding: 10px 20px;
-      border-radius: 20px;
-      font-weight: 600;
-      font-size: 0.85rem;
-      border: none;
-      cursor: pointer;
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--ember); color: #000; padding: 10px 20px;
+      border-radius: 20px; font-weight: 600; font-size: 0.85rem;
+      border: none; cursor: pointer;
     }
 
     /* ═══════════════════════════════════════════════
        TAB 2: SCAN CLOTHING
        ═══════════════════════════════════════════════ */
-
     .scan-view-content {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 20px;
-      padding: 10px 0;
+      display: flex; flex-direction: column; align-items: center; gap: 20px; padding: 10px 0;
     }
     .scan-hero {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 20px;
-      width: 100%;
-      padding: 30px 10px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 20px; width: 100%; padding: 30px 10px;
     }
     .scan-target {
-      position: relative;
-      width: 200px;
-      height: 200px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
+      position: relative; width: 190px; height: 190px;
+      display: flex; align-items: center; justify-content: center; cursor: pointer;
     }
     .scan-target:active { transform: scale(0.96); }
     .scan-ring-outer {
-      position: absolute;
-      inset: 0;
-      border-radius: 50%;
-      border: 3px dashed var(--ember);
-      opacity: 0.6;
+      position: absolute; inset: 0; border-radius: 50%;
+      border: 3px dashed var(--ember); opacity: 0.6;
       animation: rotateRing 20s linear infinite;
     }
-    @keyframes rotateRing { to { transform: rotate(360deg); } }
     .scan-target.scanning .scan-ring-outer {
-      animation: pulseRing 1.2s ease-in-out infinite, rotateRing 6s linear infinite;
-      border-style: solid;
-      border-color: var(--ember);
-    }
-    @keyframes pulseRing {
-      0%, 100% { opacity: 0.8; transform: scale(1); }
-      50% { opacity: 0.3; transform: scale(1.08); }
+      animation: pulseScan 1.2s ease-in-out infinite, rotateRing 6s linear infinite;
+      border-style: solid; border-color: var(--ember);
     }
     .scan-inner-circle {
-      width: 160px;
-      height: 160px;
-      border-radius: 50%;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+      width: 154px; height: 154px; border-radius: 50%;
+      background: var(--surface); border: 1px solid var(--border);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 8px; box-shadow: 0 4px 24px rgba(0,0,0,0.5);
     }
     .scan-circle-icon { font-size: 2.8rem; }
     .scan-circle-text { font-family: 'Space Grotesk', sans-serif; font-size: 0.95rem; font-weight: 600; color: var(--ember); }
     .scan-spinner {
-      display: none;
-      width: 36px;
-      height: 36px;
-      border: 3px solid var(--border);
-      border-top-color: var(--ember);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
+      display: none; width: 36px; height: 36px;
+      border: 3px solid var(--border); border-top-color: var(--ember);
+      border-radius: 50%; animation: spin 0.8s linear infinite;
     }
     .scan-target.scanning .scan-circle-icon,
     .scan-target.scanning .scan-circle-text { display: none; }
     .scan-target.scanning .scan-spinner { display: block; }
     @keyframes spin { to { transform: rotate(360deg); } }
-
-    .scan-hints {
-      text-align: center;
-      font-size: 0.85rem;
-      color: var(--ink-dim);
-      line-height: 1.5;
-    }
-    .scan-hints strong { color: var(--ink); }
+    .scan-hints { text-align: center; font-size: 0.85rem; color: var(--ink-dim); line-height: 1.5; }
 
     /* Detection Result Card */
     .detect-result-card {
-      display: none;
-      width: 100%;
-      background: var(--surface);
-      border: 1px solid var(--border-active);
-      border-radius: var(--radius-xl);
-      overflow: hidden;
-      animation: slideUp 0.3s ease-out;
-      margin-top: 4px;
+      display: none; width: 100%; background: var(--surface);
+      border: 1px solid var(--border-active); border-radius: var(--radius-xl);
+      overflow: hidden; animation: slideUp 0.3s ease-out; margin-top: 4px;
     }
     .detect-result-card.visible { display: block; }
     @keyframes slideUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
-    .detect-photo-preview {
-      width: 100%;
-      height: 190px;
-      object-fit: cover;
-      display: block;
-      background: var(--surface-2);
-    }
+    .detect-photo-preview { width: 100%; height: 190px; object-fit: cover; display: block; background: var(--surface-2); }
     .detect-card-body { padding: 16px; }
-    .chips-label {
-      font-size: 0.72rem;
-      color: var(--ink-dim);
-      text-transform: uppercase;
-      font-weight: 600;
-      letter-spacing: 0.04em;
-      margin-bottom: 6px;
-    }
-    .chip-grid {
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 6px;
-      margin-bottom: 14px;
-    }
+    .chips-label { font-size: 0.72rem; color: var(--ink-dim); text-transform: uppercase; font-weight: 600; margin-bottom: 6px; }
+    .chip-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 14px; }
     .chip {
-      background: var(--surface-2);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-xs);
-      padding: 8px 2px;
-      color: var(--ink);
-      font-size: 0.72rem;
-      font-weight: 500;
-      text-align: center;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 3px;
-      cursor: pointer;
-      transition: all 0.15s;
+      background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-xs);
+      padding: 8px 2px; color: var(--ink); font-size: 0.72rem; font-weight: 500;
+      text-align: center; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer;
     }
-    .chip.active {
-      background: var(--ember);
-      color: #000;
-      border-color: var(--ember);
-      font-weight: 600;
-      box-shadow: 0 2px 10px var(--ember-glow);
-    }
-    .form-group {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      margin-bottom: 10px;
-    }
-    .form-label {
-      font-size: 0.72rem;
-      color: var(--ink-dim);
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      font-weight: 500;
-    }
+    .chip.active { background: var(--ember); color: #000; border-color: var(--ember); font-weight: 600; }
+    .form-group { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+    .form-label { font-size: 0.72rem; color: var(--ink-dim); text-transform: uppercase; font-weight: 500; }
     .form-input, .form-select {
-      width: 100%;
-      padding: 10px 12px;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-xs);
-      color: var(--ink);
-      font-family: inherit;
-      font-size: 0.9rem;
+      width: 100%; padding: 10px 12px; background: var(--bg);
+      border: 1px solid var(--border); border-radius: var(--radius-xs);
+      color: var(--ink); font-family: inherit; font-size: 0.9rem;
     }
-    .form-input:focus, .form-select:focus {
-      outline: none;
-      border-color: var(--ember);
-    }
-    .form-actions-row {
-      display: flex;
-      gap: 10px;
-      margin-top: 14px;
-    }
+    .form-input:focus, .form-select:focus { outline: none; border-color: var(--ember); }
+    .form-actions-row { display: flex; gap: 10px; margin-top: 14px; }
     .btn-submit {
-      flex: 1;
-      padding: 12px;
-      background: var(--ember);
-      color: #000;
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 0.95rem;
-      font-weight: 600;
-      border: none;
-      border-radius: var(--radius-sm);
-      cursor: pointer;
-      transition: opacity 0.15s;
+      flex: 1; padding: 12px; background: var(--ember); color: #000;
+      font-family: 'Space Grotesk', sans-serif; font-size: 0.95rem; font-weight: 600;
+      border: none; border-radius: var(--radius-sm); cursor: pointer;
     }
-    .btn-submit:active { opacity: 0.85; }
     .btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
     .btn-ghost {
-      padding: 12px 18px;
-      background: transparent;
-      color: var(--ink-dim);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
-      font-family: inherit;
-      font-size: 0.9rem;
-      cursor: pointer;
+      padding: 12px 18px; background: transparent; color: var(--ink-dim);
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      font-family: inherit; font-size: 0.9rem; cursor: pointer;
     }
-    .btn-ghost:active { background: var(--surface-2); }
 
     /* ═══════════════════════════════════════════════
-       TAB 3: USERS & FACE ENROLLMENT
+       TAB 3: USERS & FACE ID
        ═══════════════════════════════════════════════ */
-
     .active-profile-card {
       background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(20,20,26,0.9) 100%);
-      border: 1px solid var(--border-active);
-      border-radius: var(--radius-xl);
-      padding: 16px;
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      margin-bottom: 20px;
+      border: 1px solid var(--border-active); border-radius: var(--radius-xl);
+      padding: 16px; display: flex; align-items: center; gap: 14px; margin-bottom: 20px;
     }
     .active-profile-avatar {
-      width: 58px;
-      height: 58px;
-      border-radius: 50%;
-      object-fit: cover;
-      border: 2px solid var(--ember);
-      box-shadow: 0 0 16px var(--ember-glow);
+      width: 58px; height: 58px; border-radius: 50%; object-fit: cover;
+      border: 2px solid var(--ember); box-shadow: 0 0 16px var(--ember-glow);
     }
     .active-profile-details { flex: 1; }
     .active-badge-tag {
-      font-size: 0.65rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: var(--ok);
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      margin-bottom: 2px;
+      font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
+      color: var(--ok); display: inline-flex; align-items: center; gap: 4px; margin-bottom: 2px;
     }
-    .active-profile-name {
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 1.15rem;
-      font-weight: 600;
-    }
-    .active-profile-sub {
-      font-size: 0.75rem;
-      color: var(--ink-dim);
-    }
+    .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+    .active-profile-name { font-family: 'Space Grotesk', sans-serif; font-size: 1.15rem; font-weight: 600; }
+    .active-profile-sub { font-size: 0.75rem; color: var(--ink-dim); }
 
-    /* User Profile Cards */
-    .user-list {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
+    .user-list { display: flex; flex-direction: column; gap: 10px; }
     .user-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 14px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      transition: all 0.2s ease;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 14px; display: flex; align-items: center; gap: 12px;
     }
-    .user-card.current {
-      border-color: var(--ember);
-      background: var(--surface-2);
-    }
-    .user-card-avatar {
-      width: 48px;
-      height: 48px;
-      border-radius: 50%;
-      object-fit: cover;
-      border: 1px solid var(--border);
-    }
+    .user-card.current { border-color: var(--ember); background: var(--surface-2); }
+    .user-card-avatar { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border); }
     .user-card-info { flex: 1; min-width: 0; }
-    .user-card-title {
-      font-size: 0.95rem;
-      font-weight: 600;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin-bottom: 3px;
-    }
-    .user-card-meta {
-      font-size: 0.72rem;
-      color: var(--ink-dim);
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-    .badge-chip {
-      background: var(--surface-3);
-      padding: 2px 7px;
-      border-radius: 10px;
-      color: var(--ink-dim);
-      font-size: 0.68rem;
-    }
-    .badge-chip.has-face {
-      background: var(--ok-glow);
-      color: var(--ok);
-      border: 1px solid rgba(16,185,129,0.3);
-    }
-    .user-card-actions {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
+    .user-card-title { font-size: 0.95rem; font-weight: 600; display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+    .user-card-meta { display: flex; flex-wrap: wrap; gap: 6px; }
+    .badge-chip { background: var(--surface-3); padding: 2px 7px; border-radius: 10px; color: var(--ink-dim); font-size: 0.68rem; }
+    .badge-chip.has-face { background: var(--ok-glow); color: var(--ok); border: 1px solid rgba(16,185,129,0.3); }
+    .user-card-actions { display: flex; align-items: center; gap: 6px; }
     .btn-switch-user {
-      padding: 7px 12px;
-      background: var(--surface-2);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-xs);
-      color: var(--ink);
-      font-size: 0.75rem;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.15s;
+      padding: 7px 12px; background: var(--surface-2); border: 1px solid var(--border);
+      border-radius: var(--radius-xs); color: var(--ink); font-size: 0.75rem; font-weight: 500; cursor: pointer;
     }
-    .btn-switch-user.active {
-      background: var(--ember);
-      color: #000;
-      border-color: var(--ember);
-      font-weight: 600;
-    }
-    .btn-switch-user:active { transform: scale(0.96); }
+    .btn-switch-user.active { background: var(--ember); color: #000; border-color: var(--ember); font-weight: 600; }
     .btn-delete-user {
-      width: 30px;
-      height: 30px;
-      border-radius: var(--radius-xs);
-      background: transparent;
-      border: 1px solid var(--border-light);
-      color: var(--danger);
-      font-size: 1.1rem;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
+      width: 30px; height: 30px; border-radius: var(--radius-xs); background: transparent;
+      border: 1px solid var(--border-light); color: var(--danger); font-size: 1.1rem;
+      display: flex; align-items: center; justify-content: center; cursor: pointer;
     }
-    .btn-delete-user:active { background: var(--danger-glow); }
-
-    /* Floating / Header Add User CTA */
     .btn-open-register {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      width: 100%;
-      padding: 13px;
-      background: var(--surface);
-      border: 1px dashed var(--border-active);
-      border-radius: var(--radius);
-      color: var(--ember);
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 0.9rem;
-      font-weight: 600;
-      cursor: pointer;
-      margin-top: 14px;
-      transition: background 0.15s;
+      display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
+      padding: 13px; background: var(--surface); border: 1px dashed var(--border-active);
+      border-radius: var(--radius); color: var(--ember); font-family: 'Space Grotesk', sans-serif;
+      font-size: 0.9rem; font-weight: 600; cursor: pointer; margin-top: 14px;
     }
-    .btn-open-register:active { background: var(--surface-2); }
 
-    /* Registration Modal */
+    /* Modal */
     .modal-backdrop {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.8);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      z-index: 200;
-      align-items: flex-end;
-      justify-content: center;
-      animation: modalFadeIn 0.2s ease-out;
+      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+      backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+      z-index: 400; align-items: flex-end; justify-content: center;
     }
     .modal-backdrop.open { display: flex; }
-    @keyframes modalFadeIn { from { opacity: 0; } to { opacity: 1; } }
     .modal-sheet {
-      width: 100%;
-      max-width: 480px;
-      background: var(--surface);
-      border-top: 1px solid var(--border);
-      border-radius: 24px 24px 0 0;
-      padding: 20px 20px calc(24px + var(--safe-bottom));
-      max-height: 90vh;
-      overflow-y: auto;
-      animation: modalSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      width: 100%; max-width: 480px; background: var(--surface);
+      border-top: 1px solid var(--border); border-radius: 24px 24px 0 0;
+      padding: 20px 20px calc(24px + var(--safe-bottom)); max-height: 90vh;
+      overflow-y: auto; animation: modalSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     }
     @keyframes modalSlideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-    .modal-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 16px;
-    }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
     .modal-title { font-family: 'Space Grotesk', sans-serif; font-size: 1.15rem; font-weight: 600; }
     .modal-close {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      background: var(--surface-2);
-      border: none;
-      color: var(--ink-dim);
-      font-size: 1.2rem;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
+      width: 32px; height: 32px; border-radius: 50%; background: var(--surface-2);
+      border: none; color: var(--ink-dim); font-size: 1.2rem;
+      display: flex; align-items: center; justify-content: center; cursor: pointer;
     }
     .selfie-card {
-      border: 2px dashed var(--border);
-      border-radius: var(--radius);
-      padding: 16px;
-      text-align: center;
-      margin: 12px 0 16px;
-      position: relative;
-      background: var(--surface-2);
+      border: 2px dashed var(--border); border-radius: var(--radius);
+      padding: 16px; text-align: center; margin: 12px 0 16px; background: var(--surface-2);
     }
     .selfie-preview-img {
-      width: 100px;
-      height: 100px;
-      border-radius: 50%;
-      object-fit: cover;
-      margin: 0 auto 8px;
-      display: none;
-      border: 2px solid var(--ember);
+      width: 90px; height: 90px; border-radius: 50%; object-fit: cover;
+      margin: 0 auto 8px; display: none; border: 2px solid var(--ember);
     }
     .selfie-camera-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      background: var(--surface-3);
-      border: 1px solid var(--border);
-      color: var(--ink);
-      padding: 8px 16px;
-      border-radius: 20px;
-      font-size: 0.82rem;
-      font-weight: 500;
-      cursor: pointer;
-    }
-    .selfie-hint {
-      font-size: 0.72rem;
-      color: var(--ink-dim);
-      margin-top: 6px;
-      line-height: 1.4;
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--surface-3); border: 1px solid var(--border);
+      color: var(--ink); padding: 8px 16px; border-radius: 20px;
+      font-size: 0.82rem; font-weight: 500; cursor: pointer;
     }
 
     /* ═══════════════════════════════════════════════
        TAB 4: REMOTE & TELEMETRY
        ═══════════════════════════════════════════════ */
-
-    /* Live Mirror Status Bar */
     .mirror-status-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 14px 16px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 14px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 14px 16px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;
     }
-    .status-left { display: flex; align-items: center; gap: 10px; }
-    .status-indicator-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: var(--ok);
-      box-shadow: 0 0 10px var(--ok);
-    }
-    .status-indicator-dot.offline {
-      background: var(--danger);
-      box-shadow: 0 0 10px var(--danger);
-    }
+    .status-indicator-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 10px var(--ok); }
+    .status-indicator-dot.offline { background: var(--danger); box-shadow: 0 0 10px var(--danger); }
     .mirror-title { font-size: 0.9rem; font-weight: 600; }
     .mirror-host-sub { font-size: 0.72rem; color: var(--ink-dim); }
 
-    /* Privacy Toggle Card */
     .privacy-toggle-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-xl);
-      padding: 16px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 16px;
-      cursor: pointer;
-      transition: all 0.2s;
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-xl);
+      padding: 16px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; cursor: pointer;
     }
     .privacy-toggle-card.active {
-      border-color: var(--danger);
-      background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(20,20,26,0.9) 100%);
+      border-color: var(--danger); background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(20,20,26,0.9) 100%);
     }
-    .privacy-info { display: flex; align-items: center; gap: 12px; }
     .privacy-icon {
-      width: 42px;
-      height: 42px;
-      border-radius: 12px;
-      background: var(--surface-2);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 1.3rem;
+      width: 42px; height: 42px; border-radius: 12px; background: var(--surface-2);
+      display: flex; align-items: center; justify-content: center; font-size: 1.3rem;
     }
-    .privacy-toggle-card.active .privacy-icon { background: var(--danger-glow); color: var(--danger); }
-    .privacy-title { font-size: 0.92rem; font-weight: 600; }
-    .privacy-desc { font-size: 0.72rem; color: var(--ink-dim); margin-top: 2px; }
-
-    /* Switch Component */
-    .switch {
-      position: relative;
-      display: inline-block;
-      width: 46px;
-      height: 26px;
-      pointer-events: none;
-    }
+    .switch { position: relative; display: inline-block; width: 46px; height: 26px; pointer-events: none; }
     .switch input { opacity: 0; width: 0; height: 0; }
-    .slider {
-      position: absolute;
-      cursor: pointer;
-      inset: 0;
-      background-color: var(--surface-3);
-      border-radius: 26px;
-      transition: .3s;
-    }
+    .slider { position: absolute; inset: 0; background-color: var(--surface-3); border-radius: 26px; transition: .3s; }
     .slider:before {
-      position: absolute;
-      content: "";
-      height: 20px;
-      width: 20px;
-      left: 3px;
-      bottom: 3px;
-      background-color: white;
-      border-radius: 50%;
-      transition: .3s;
+      position: absolute; content: ""; height: 20px; width: 20px; left: 3px; bottom: 3px;
+      background-color: white; border-radius: 50%; transition: .3s;
     }
     input:checked + .slider { background-color: var(--danger); }
     input:checked + .slider:before { transform: translateX(20px); }
 
-    /* Telemetry 4-Grid */
-    .telemetry-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 10px;
-      margin-bottom: 16px;
-    }
+    .telemetry-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px; }
     .telemetry-card {
-      background: var(--surface);
-      border: 1px solid var(--border-light);
-      border-radius: var(--radius);
-      padding: 12px 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
+      background: var(--surface); border: 1px solid var(--border-light); border-radius: var(--radius);
+      padding: 12px 14px; display: flex; flex-direction: column; gap: 6px;
     }
-    .telem-top {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      color: var(--ink-dim);
-      font-size: 0.75rem;
-    }
-    .telem-val {
-      font-family: 'Space Grotesk', sans-serif;
-      font-size: 1.45rem;
-      font-weight: 600;
-      letter-spacing: -0.02em;
-    }
-    .telem-sub {
-      font-size: 0.68rem;
-      color: var(--ink-faint);
-    }
+    .telem-top { display: flex; align-items: center; justify-content: space-between; color: var(--ink-dim); font-size: 0.75rem; }
+    .telem-val { font-family: 'Space Grotesk', sans-serif; font-size: 1.45rem; font-weight: 600; letter-spacing: -0.02em; }
+    .telem-sub { font-size: 0.68rem; color: var(--ink-faint); }
 
-    /* Live Mirror AI Stylist Feed */
     .mirror-stylist-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-xl);
-      padding: 16px;
-      margin-bottom: 16px;
-    }
-    .stylist-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 10px;
-    }
-    .stylist-label { font-family: 'Space Grotesk', sans-serif; font-size: 0.92rem; font-weight: 600; }
-    .stylist-score-pill {
-      font-size: 0.72rem;
-      background: var(--ember-glow);
-      color: var(--ember);
-      padding: 2px 8px;
-      border-radius: 12px;
-      font-weight: 600;
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-xl);
+      padding: 16px; margin-bottom: 16px;
     }
     .stylist-advice-text {
-      font-size: 0.82rem;
-      color: var(--ink-dim);
-      line-height: 1.45;
-      background: var(--surface-2);
-      padding: 10px 12px;
-      border-radius: var(--radius-xs);
-      border-left: 2px solid var(--ember);
+      font-size: 0.82rem; color: var(--ink-dim); line-height: 1.45;
+      background: var(--surface-2); padding: 10px 12px; border-radius: var(--radius-xs);
+      border-left: 2px solid var(--ember); margin-top: 8px;
     }
 
-    /* Reminders Manager Card */
     .reminders-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-xl);
-      padding: 16px;
-      margin-bottom: 20px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-xl);
+      padding: 16px; margin-bottom: 20px;
     }
-    .reminders-list {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin: 12px 0;
-      max-height: 180px;
-      overflow-y: auto;
-    }
+    .reminders-list { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; max-height: 180px; overflow-y: auto; }
     .reminder-item {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--surface-2); border-radius: var(--radius-xs); padding: 8px 12px; font-size: 0.82rem;
+    }
+    .reminder-time { color: var(--ember); font-weight: 600; font-size: 0.75rem; margin-right: 8px; }
+    .btn-del-reminder { background: transparent; border: none; color: var(--ink-faint); font-size: 1rem; cursor: pointer; }
+    .reminder-form { display: flex; gap: 8px; margin-top: 10px; }
+    .reminder-input { flex: 1; padding: 8px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-xs); color: var(--ink); font-size: 0.82rem; }
+    .reminder-time-input { width: 86px; padding: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-xs); color: var(--ink); font-size: 0.82rem; }
+    .btn-add-reminder { padding: 8px 14px; background: var(--ember); color: #000; border: none; border-radius: var(--radius-xs); font-weight: 600; font-size: 0.82rem; cursor: pointer; }
+
+    /* ── Voice Concierge Briefing Card ── */
+    .voice-concierge-card {
+      background: linear-gradient(135deg, rgba(232, 183, 109, 0.09) 0%, rgba(20, 20, 26, 0.95) 100%);
+      border: 1px solid var(--border-active);
+      border-radius: var(--radius-xl);
+      padding: 18px;
+      margin-bottom: 16px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    }
+    .concierge-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      background: var(--surface-2);
-      border-radius: var(--radius-xs);
-      padding: 8px 12px;
-      font-size: 0.82rem;
+      margin-bottom: 12px;
     }
-    .reminder-time {
-      color: var(--ember);
-      font-weight: 600;
-      font-size: 0.75rem;
-      margin-right: 8px;
-    }
-    .btn-del-reminder {
-      background: transparent;
-      border: none;
-      color: var(--ink-faint);
-      font-size: 1rem;
-      cursor: pointer;
-      padding: 2px 6px;
-    }
-    .btn-del-reminder:active { color: var(--danger); }
-    .reminder-form {
+    .concierge-title-group {
       display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .concierge-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: rgba(232, 183, 109, 0.15);
+      border: 1px solid rgba(232, 183, 109, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+    }
+    .concierge-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--ink);
+    }
+    .concierge-subtitle {
+      font-size: 0.72rem;
+      color: var(--ink-dim);
+    }
+    .concierge-status-badge {
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 12px;
+      background: var(--surface-3);
+      color: var(--ink-dim);
+      border: 1px solid var(--border);
+      transition: all 0.2s;
+    }
+    .concierge-status-badge.active {
+      background: var(--ok-glow);
+      color: var(--ok);
+      border-color: rgba(16, 185, 129, 0.4);
+    }
+    .concierge-status-badge.speaking {
+      background: rgba(232, 183, 109, 0.2);
+      color: var(--ember);
+      border-color: var(--ember);
+    }
+    .concierge-preview-box {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      font-size: 0.82rem;
+      line-height: 1.5;
+      color: var(--ink-dim);
+      margin-bottom: 12px;
+      max-height: 110px;
+      overflow-y: auto;
+    }
+    .concierge-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+    .concierge-tag {
+      font-size: 0.68rem;
+      padding: 3px 8px;
+      border-radius: 8px;
+      background: var(--surface-3);
+      color: var(--ink-dim);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .concierge-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
       gap: 8px;
-      margin-top: 10px;
     }
-    .reminder-input {
-      flex: 1;
-      padding: 8px 12px;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-xs);
-      color: var(--ink);
-      font-size: 0.82rem;
-    }
-    .reminder-time-input {
-      width: 86px;
-      padding: 8px;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-xs);
-      color: var(--ink);
-      font-size: 0.82rem;
-    }
-    .btn-add-reminder {
-      padding: 8px 14px;
+    .btn-concierge-play {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 11px 12px;
       background: var(--ember);
       color: #000;
       border: none;
-      border-radius: var(--radius-xs);
-      font-weight: 600;
+      border-radius: var(--radius-sm);
+      font-family: 'Space Grotesk', sans-serif;
       font-size: 0.82rem;
+      font-weight: 700;
       cursor: pointer;
+      box-shadow: 0 2px 10px var(--ember-glow);
+      transition: all 0.15s;
     }
+    .btn-concierge-play:active { transform: scale(0.97); }
+    .btn-concierge-phone {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 11px 12px;
+      background: var(--surface-2);
+      color: var(--ink);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-concierge-phone:active { transform: scale(0.97); }
+    .btn-concierge-stop {
+      grid-column: span 2;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px;
+      background: transparent;
+      color: var(--danger);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: var(--radius-sm);
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 4px;
+    }
+    .btn-concierge-stop:active { background: rgba(239, 68, 68, 0.1); }
 
     /* ═══════════════════════════════════════════════
        BOTTOM NAVIGATION BAR
        ═══════════════════════════════════════════════ */
-
     .bottom-nav {
-      position: fixed;
-      bottom: 0;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 100%;
-      max-width: 480px;
-      display: flex;
-      align-items: center;
-      justify-content: space-around;
-      height: calc(64px + var(--safe-bottom));
-      padding-bottom: var(--safe-bottom);
-      background: var(--glass);
-      backdrop-filter: blur(24px);
-      -webkit-backdrop-filter: blur(24px);
-      border-top: 1px solid var(--border);
-      z-index: 100;
+      position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+      width: 100%; max-width: 480px; display: flex; align-items: center; justify-content: space-around;
+      height: calc(64px + var(--safe-bottom)); padding-bottom: var(--safe-bottom);
+      background: var(--glass); backdrop-filter: blur(24px); border-top: 1px solid var(--border); z-index: 100;
     }
     .nav-tab {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 3px;
-      cursor: pointer;
-      padding: 6px 14px;
-      color: var(--ink-faint);
-      transition: color 0.15s;
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      cursor: pointer; padding: 6px 14px; color: var(--ink-faint);
     }
     .nav-tab.active { color: var(--ember); }
     .nav-tab-icon { font-size: 1.3rem; line-height: 1; }
-    .nav-tab-label {
-      font-size: 0.65rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      font-weight: 600;
-    }
-
-    /* Elevated Scan Center Button */
-    .nav-tab.scan-nav {
-      position: relative;
-      top: -10px;
-    }
-    .nav-tab.scan-nav .scan-btn-circle {
-      width: 48px;
-      height: 48px;
-      border-radius: 50%;
-      background: var(--ember-gradient);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: #000;
+    .nav-tab-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+    .nav-tab.scan-nav { position: relative; top: -10px; }
+    .scan-btn-circle {
+      width: 48px; height: 48px; border-radius: 50%; background: var(--ember-gradient);
+      display: flex; align-items: center; justify-content: center; color: #000;
       box-shadow: 0 4px 18px var(--ember-glow);
-      transition: transform 0.15s ease;
     }
-    .nav-tab.scan-nav:active .scan-btn-circle { transform: scale(0.92); }
+    .scan-btn-circle:active { transform: scale(0.92); }
     .nav-tab.scan-nav .nav-tab-icon { font-size: 1.4rem; color: #000; }
-    .nav-tab.scan-nav.active .nav-tab-label { color: var(--ember); }
-
-    /* ── Toast Notifications ── */
-    .toast-msg {
-      position: fixed;
-      top: 16px;
-      left: 50%;
-      transform: translateX(-50%) translateY(-100px);
-      max-width: 380px;
-      width: calc(100% - 32px);
-      padding: 12px 16px;
-      border-radius: var(--radius-sm);
-      font-size: 0.85rem;
-      font-weight: 500;
-      text-align: center;
-      z-index: 300;
-      transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-    }
-    .toast-msg.visible { transform: translateX(-50%) translateY(0); }
-    .toast-msg.success { background: rgba(16, 185, 129, 0.25); border: 1px solid var(--ok); color: #a7f3d0; }
-    .toast-msg.error { background: rgba(239, 68, 68, 0.25); border: 1px solid var(--danger); color: #fecaca; }
   </style>
 </head>
 <body>
@@ -1200,386 +937,399 @@
     <!-- Toast Notification -->
     <div class="toast-msg" id="toast"></div>
 
-    <!-- ═══ TOP APP BAR ═══ -->
-    <header class="top-bar">
-      <div class="brand">
-        <div class="brand-logo">R</div>
-        <div class="brand-title">Reflect<span>AI</span></div>
-      </div>
-      <div class="active-user-pill" onclick="switchTab('tab-users')">
-        <img class="active-user-avatar" id="top-user-avatar" src="/avatar/guest" alt="Avatar" />
-        <span class="active-user-name" id="top-user-name">Guest</span>
-        <span class="live-dot" title="Live sync with Smart Mirror"></span>
-      </div>
-    </header>
-
-    <!-- ═══════════════════════════════════════════
-         TAB 1: CLOSET
-         ═══════════════════════════════════════════ -->
-    <main class="view active" id="tab-closet">
-
-      <!-- Today's Outfit AI Recommendation Card -->
-      <section class="outfit-hero" id="outfit-hero">
-        <div class="outfit-top-row">
-          <span class="outfit-tag">✨ Recommended Outfit</span>
-          <span class="outfit-weather-pill" id="outfit-weather-tag">Loading weather…</span>
-        </div>
-        <div class="outfit-pieces-grid" id="outfit-pieces">
-          <div class="outfit-piece-card">
-            <div class="piece-icon-fallback">👕</div>
-            <span class="piece-cat">Top</span>
-            <span class="piece-name" id="rec-top-name">—</span>
-          </div>
-          <div class="outfit-piece-card">
-            <div class="piece-icon-fallback">👖</div>
-            <span class="piece-cat">Bottom</span>
-            <span class="piece-name" id="rec-bottom-name">—</span>
-          </div>
-          <div class="outfit-piece-card">
-            <div class="piece-icon-fallback">👟</div>
-            <span class="piece-cat">Shoes</span>
-            <span class="piece-name" id="rec-shoes-name">—</span>
-          </div>
-        </div>
-        <div class="outfit-reason-box" id="rec-reason-box">
-          <span>💡</span>
-          <span id="rec-reason-text">Personalizing recommendation based on today's weather and style profile...</span>
-        </div>
-      </section>
-
-      <!-- Category Filter Tabs -->
-      <div class="section-header">
-        <span class="section-title">My Wardrobe</span>
-        <span class="section-badge" id="closet-total-count">0 items</span>
-      </div>
-      <div class="tabs-bar" id="category-tabs">
-        <button class="cat-tab active" data-cat="all">All</button>
-        <button class="cat-tab" data-cat="top">👕 Tops</button>
-        <button class="cat-tab" data-cat="bottom">👖 Bottoms</button>
-        <button class="cat-tab" data-cat="footwear">👟 Footwear</button>
-        <button class="cat-tab" data-cat="outerwear">🧥 Outerwear</button>
-        <button class="cat-tab" data-cat="accessory">💍 Accessories</button>
+    <!-- ═══════════════════════════════════════════════
+         STAGE 1: LOGIN & AUTH GATEWAY (ONLY SCREEN SHOWN INITIALLY)
+         ═══════════════════════════════════════════════ -->
+    <div class="gate-screen" id="gate-screen">
+      <div class="gate-brand">
+        <div class="gate-logo">R</div>
+        <div class="gate-title">Reflect<span>AI</span></div>
+        <p class="gate-subtitle">Please authenticate with Face ID to access your personal wardrobe and mirror controls.</p>
       </div>
 
-      <!-- Items Grid -->
-      <div class="wardrobe-grid" id="wardrobe-grid"></div>
-    </main>
-
-    <!-- ═══════════════════════════════════════════
-         TAB 2: SCAN CLOTHING
-         ═══════════════════════════════════════════ -->
-    <main class="view" id="tab-scan">
-      <div class="scan-view-content">
-
-        <!-- Scan Hero Action Ring -->
-        <div class="scan-hero" id="scan-hero">
-          <div class="scan-target" id="scan-target" onclick="triggerScanInput()">
-            <div class="scan-ring-outer"></div>
-            <div class="scan-inner-circle">
-              <span class="scan-circle-icon">📷</span>
-              <span class="scan-circle-text">Scan Garment</span>
-              <div class="scan-spinner"></div>
-            </div>
-          </div>
-          <p class="scan-hints">
-            Snap a photo of any garment.<br>
-            AI automatically classifies <strong>category, color & weather suitability</strong>.
-          </p>
+      <!-- Biometric Scanner Ring -->
+      <div class="biometric-box" id="biometric-box" onclick="triggerFaceAuth()">
+        <div class="biometric-ring"></div>
+        <div class="biometric-inner">
+          <div class="scan-laser-line"></div>
+          <span class="biometric-icon" id="gate-icon-visual">🤳</span>
+          <img class="biometric-avatar-preview" id="gate-avatar-success" src="" alt="Avatar" />
         </div>
-
-        <input type="file" accept="image/*" capture="environment" id="scan-file-input" style="display: none;" />
-
-        <!-- AI Detection Card -->
-        <div class="detect-result-card" id="detect-card">
-          <img class="detect-photo-preview" id="detect-preview" src="" alt="Preview" />
-          <div class="detect-card-body">
-            <div class="chips-label">Garment Category (1-Tap Override)</div>
-            <div class="chip-grid" id="chip-grid">
-              <button type="button" class="chip active" data-cat="top" data-sub="T-Shirt" onclick="selectChip('top', 'T-Shirt')">
-                <span>👕</span><span>T-Shirt</span>
-              </button>
-              <button type="button" class="chip" data-cat="top" data-sub="Shirt" onclick="selectChip('top', 'Shirt')">
-                <span>👔</span><span>Shirt</span>
-              </button>
-              <button type="button" class="chip" data-cat="bottom" data-sub="Pants" onclick="selectChip('bottom', 'Pants')">
-                <span>👖</span><span>Pants</span>
-              </button>
-              <button type="button" class="chip" data-cat="outerwear" data-sub="Jacket" onclick="selectChip('outerwear', 'Jacket')">
-                <span>🧥</span><span>Jacket</span>
-              </button>
-              <button type="button" class="chip" data-cat="footwear" data-sub="Sneakers" onclick="selectChip('footwear', 'Sneakers')">
-                <span>👟</span><span>Shoes</span>
-              </button>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Garment Name</label>
-              <input type="text" class="form-input" id="det-name" placeholder="e.g. Navy Blue Denim Jacket" />
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Category</label>
-              <select class="form-select" id="det-category">
-                <option value="top">Top</option>
-                <option value="bottom">Bottom</option>
-                <option value="footwear">Footwear</option>
-                <option value="outerwear">Outerwear</option>
-                <option value="accessory">Accessory</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Color</label>
-              <input type="text" class="form-input" id="det-color" placeholder="e.g. Navy blue, Black, Olive" />
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Weather Suitability</label>
-              <select class="form-select" id="det-weather">
-                <option value="any">Any Weather</option>
-                <option value="hot">Hot (30°C+)</option>
-                <option value="warm">Warm (24°–30°C)</option>
-                <option value="cool">Cool (15°–24°C)</option>
-                <option value="cold">Cold (Below 15°C)</option>
-                <option value="rain">Rainy Weather</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Occasion</label>
-              <select class="form-select" id="det-occasion">
-                <option value="casual">Casual / Daily</option>
-                <option value="formal">Work / Formal</option>
-                <option value="sport">Sport / Workout</option>
-                <option value="evening">Evening / Party</option>
-              </select>
-            </div>
-
-            <div class="form-actions-row">
-              <button type="button" class="btn-ghost" onclick="cancelScan()">Cancel</button>
-              <button type="button" class="btn-submit" id="btn-save-item" onclick="saveGarment()">Add to Wardrobe</button>
-            </div>
-          </div>
-        </div>
-
-      </div>
-    </main>
-
-    <!-- ═══════════════════════════════════════════
-         TAB 3: USERS & FACE ID
-         ═══════════════════════════════════════════ -->
-    <main class="view" id="tab-users">
-      
-      <!-- Active Mirror Banner -->
-      <section class="active-profile-card">
-        <img class="active-profile-avatar" id="banner-user-avatar" src="/avatar/guest" alt="Active user" />
-        <div class="active-profile-details">
-          <div class="active-badge-tag"><span class="live-dot"></span> Active On Mirror</div>
-          <div class="active-profile-name" id="banner-user-name">Guest</div>
-          <div class="active-profile-sub" id="banner-user-style">Style: Casual · Mirror synced</div>
-        </div>
-      </section>
-
-      <div class="section-header">
-        <span class="section-title">All Profiles & Face ID</span>
-        <span class="section-badge" id="profiles-count">0 profiles</span>
       </div>
 
-      <div class="user-list" id="users-container"></div>
+      <div class="biometric-status" id="gate-status-text">Look into camera & tap to scan</div>
 
-      <button class="btn-open-register" onclick="openRegisterModal()">
-        <span>+</span> Register New User & Face ID
+      <!-- Unregistered Alert Box -->
+      <div class="gate-alert-card" id="gate-alert-box">
+        <div class="gate-alert-title" id="gate-alert-title">⚠️ Face Not Recognized</div>
+        <p class="gate-alert-desc" id="gate-alert-desc">You are not registered in ReflectAI yet. Please register your profile to begin.</p>
+        <button class="btn-alert-cta" id="gate-alert-btn" onclick="openRegistrationFromGate()">
+          <span>+</span> Register Profile & Face ID
+        </button>
+      </div>
+
+      <button class="btn-gate-scan" id="btn-gate-scan" onclick="triggerFaceAuth()">
+        <span>📷</span> Scan Face to Unlock
       </button>
 
-      <!-- Register User & Face ID Modal -->
-      <div class="modal-backdrop" id="register-modal">
-        <div class="modal-sheet">
-          <div class="modal-header">
-            <span class="modal-title">Register User & Face ID</span>
-            <button class="modal-close" onclick="closeRegisterModal()">×</button>
-          </div>
+      <input type="file" accept="image/*" capture="user" id="gate-file-input" style="display: none;" />
+      <input type="file" accept="image/*" id="gate-file-gallery" style="display: none;" />
 
-          <div class="form-group">
-            <label class="form-label">Display Name *</label>
-            <input type="text" class="form-input" id="reg-name" placeholder="e.g. Rohan, Sarah, Ayush" />
-          </div>
+      <div class="gate-footer-actions">
+        <span class="gate-link" onclick="document.getElementById('gate-file-gallery').click()">📁 Choose photo from library</span>
+        <span class="gate-link" onclick="openRegisterModal()" style="color: var(--ember); font-weight: 600;">+ Register Profile & Face ID</span>
+      </div>
+    </div>
 
-          <div class="form-group">
-            <label class="form-label">Preferred Style</label>
-            <select class="form-select" id="reg-style">
-              <option value="Casual">Casual / Everyday</option>
-              <option value="Streetwear">Streetwear & Modern</option>
-              <option value="Formal">Formal & Business</option>
-              <option value="Sporty">Athletic & Sporty</option>
-              <option value="Minimalist">Minimalist / Clean</option>
-            </select>
+    <!-- ═══════════════════════════════════════════════
+         STAGE 2: MAIN DASHBOARD APP (SHOWN ONLY AFTER LOGIN)
+         ═══════════════════════════════════════════════ -->
+    <div class="dashboard-app" id="dashboard-app">
+      <!-- ═══ TOP APP BAR ═══ -->
+      <header class="top-bar">
+        <div class="brand">
+          <div class="brand-logo">R</div>
+          <div class="brand-title">Reflect<span>AI</span></div>
+        </div>
+        <div class="header-user-controls">
+          <div class="active-user-pill">
+            <img class="active-user-avatar" id="top-user-avatar" src="/avatar/guest" alt="Avatar" />
+            <span class="active-user-name" id="top-user-name">Guest</span>
           </div>
+          <button class="btn-logout" onclick="logoutToGate()" title="Log Out">
+            <span>🚪</span> Log Out
+          </button>
+        </div>
+      </header>
 
-          <div class="form-group">
-            <label class="form-label">Hair Preference Note</label>
-            <input type="text" class="form-input" id="reg-hair" placeholder="e.g. Textured Crop, Fade, Wavy" />
-          </div>
+      <!-- TAB 1: CLOSET -->
+      <main class="view active" id="tab-closet">
+        <div class="section-header">
+          <span class="section-title">My Wardrobe</span>
+          <span class="section-badge" id="closet-total-count">0 items</span>
+        </div>
+        <div class="tabs-bar" id="category-tabs">
+          <button class="cat-tab active" data-cat="all">All</button>
+          <button class="cat-tab" data-cat="top">👕 Tops</button>
+          <button class="cat-tab" data-cat="bottom">👖 Bottoms</button>
+          <button class="cat-tab" data-cat="footwear">👟 Footwear</button>
+          <button class="cat-tab" data-cat="outerwear">🧥 Outerwear</button>
+          <button class="cat-tab" data-cat="accessory">💍 Accessories</button>
+        </div>
 
-          <!-- Selfie Capture Area -->
-          <div class="selfie-card">
-            <img class="selfie-preview-img" id="selfie-preview" src="" alt="Selfie" />
-            <div id="selfie-action-box">
-              <span style="font-size: 1.8rem; display:block; margin-bottom:6px;">🤳</span>
-              <button type="button" class="selfie-camera-btn" onclick="triggerSelfieCapture()">
-                Take Face Selfie
-              </button>
-              <p class="selfie-hint">
-                YuNet + SFace will extract a 128-D facial feature vector so the Smart Mirror recognizes you automatically.
-              </p>
+        <div class="wardrobe-grid" id="wardrobe-grid"></div>
+      </main>
+
+      <!-- TAB 2: SCAN CLOTHING -->
+      <main class="view" id="tab-scan">
+        <div class="scan-view-content">
+          <div class="scan-hero" id="scan-hero">
+            <div class="scan-target" id="scan-target" onclick="triggerScanInput()">
+              <div class="scan-ring-outer"></div>
+              <div class="scan-inner-circle">
+                <span class="scan-circle-icon">📷</span>
+                <span class="scan-circle-text">Scan Garment</span>
+                <div class="scan-spinner"></div>
+              </div>
             </div>
-            <input type="file" accept="image/*" capture="user" id="selfie-file-input" style="display: none;" />
+            <p class="scan-hints">
+              Snap a photo of any garment.<br>
+              AI automatically classifies <strong>category, color & weather suitability</strong>.
+            </p>
           </div>
 
-          <div class="form-actions-row">
-            <button type="button" class="btn-ghost" onclick="closeRegisterModal()">Cancel</button>
-            <button type="button" class="btn-submit" id="btn-submit-register" onclick="submitRegisterUser()">Register Profile</button>
+          <input type="file" accept="image/*" capture="environment" id="scan-file-input" style="display: none;" />
+
+          <div class="detect-result-card" id="detect-card">
+            <img class="detect-photo-preview" id="detect-preview" src="" alt="Preview" />
+            <div class="detect-card-body">
+              <div class="chips-label">Garment Category (1-Tap Override)</div>
+              <div class="chip-grid" id="chip-grid">
+                <button type="button" class="chip active" data-cat="top" data-sub="T-Shirt" onclick="selectChip('top', 'T-Shirt')">
+                  <span>👕</span><span>T-Shirt</span>
+                </button>
+                <button type="button" class="chip" data-cat="top" data-sub="Shirt" onclick="selectChip('top', 'Shirt')">
+                  <span>👔</span><span>Shirt</span>
+                </button>
+                <button type="button" class="chip" data-cat="bottom" data-sub="Pants" onclick="selectChip('bottom', 'Pants')">
+                  <span>👖</span><span>Pants</span>
+                </button>
+                <button type="button" class="chip" data-cat="outerwear" data-sub="Jacket" onclick="selectChip('outerwear', 'Jacket')">
+                  <span>🧥</span><span>Jacket</span>
+                </button>
+                <button type="button" class="chip" data-cat="footwear" data-sub="Sneakers" onclick="selectChip('footwear', 'Sneakers')">
+                  <span>👟</span><span>Shoes</span>
+                </button>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Garment Name</label>
+                <input type="text" class="form-input" id="det-name" placeholder="e.g. Navy Blue Denim Jacket" />
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Category</label>
+                <select class="form-select" id="det-category">
+                  <option value="top">Top</option>
+                  <option value="bottom">Bottom</option>
+                  <option value="footwear">Footwear</option>
+                  <option value="outerwear">Outerwear</option>
+                  <option value="accessory">Accessory</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Color</label>
+                <input type="text" class="form-input" id="det-color" placeholder="e.g. Navy blue, Black, Olive" />
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Weather Suitability</label>
+                <select class="form-select" id="det-weather">
+                  <option value="any">Any Weather</option>
+                  <option value="hot">Hot (30°C+)</option>
+                  <option value="warm">Warm (24°–30°C)</option>
+                  <option value="cool">Cool (15°–24°C)</option>
+                  <option value="cold">Cold (Below 15°C)</option>
+                  <option value="rain">Rainy Weather</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Occasion</label>
+                <select class="form-select" id="det-occasion">
+                  <option value="casual">Casual / Daily</option>
+                  <option value="formal">Work / Formal</option>
+                  <option value="sport">Sport / Workout</option>
+                  <option value="evening">Evening / Party</option>
+                </select>
+              </div>
+
+              <div class="form-actions-row">
+                <button type="button" class="btn-ghost" onclick="cancelScan()">Cancel</button>
+                <button type="button" class="btn-submit" id="btn-save-item" onclick="saveGarment()">Add to Wardrobe</button>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-    </main>
+      </main>
 
-    <!-- ═══════════════════════════════════════════
-         TAB 4: MIRROR REMOTE & TELEMETRY
-         ═══════════════════════════════════════════ -->
-    <main class="view" id="tab-remote">
-      
-      <!-- Mirror Server Status -->
-      <div class="mirror-status-card">
-        <div class="status-left">
-          <span class="status-indicator-dot" id="remote-conn-dot"></span>
-          <div>
-            <div class="mirror-title">Smart Mirror Dashboard</div>
-            <div class="mirror-host-sub" id="remote-conn-sub">Port 5000 · Live sync</div>
+      <!-- TAB 3: REMOTE & TELEMETRY -->
+      <main class="view" id="tab-remote">
+        <div class="mirror-status-card">
+          <div class="status-left">
+            <span class="status-indicator-dot" id="remote-conn-dot"></span>
+            <div>
+              <div class="mirror-title">Smart Mirror Dashboard</div>
+              <div class="mirror-host-sub" id="remote-conn-sub">Port 5000 · Live sync</div>
+            </div>
+          </div>
+          <button class="btn-ghost" style="padding: 6px 12px; font-size: 0.75rem;" onclick="refreshRemoteData()">Refresh</button>
+        </div>
+
+        <div class="privacy-toggle-card" id="privacy-card" onclick="togglePrivacyMode()">
+          <div class="privacy-info">
+            <div class="privacy-icon">🛡️</div>
+            <div>
+              <div class="privacy-title">Privacy Mode</div>
+              <div class="privacy-desc" id="privacy-desc">Camera & personal widgets active</div>
+            </div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="privacy-checkbox">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <!-- Voice Concierge Briefing Card -->
+        <div class="voice-concierge-card" id="voice-concierge-card">
+          <div class="concierge-header">
+            <div class="concierge-title-group">
+              <div class="concierge-icon">🎙️</div>
+              <div>
+                <div class="concierge-title">Voice Concierge Briefing</div>
+                <div class="concierge-subtitle">Piper Offline Multimodal Valet</div>
+              </div>
+            </div>
+            <span class="concierge-status-badge" id="concierge-status-badge">Ready</span>
+          </div>
+
+          <div class="concierge-tags" id="concierge-tags">
+            <span class="concierge-tag">☀️ Live Weather</span>
+            <span class="concierge-tag">📅 Agenda & Reminders</span>
+            <span class="concierge-tag">✨ Mirror Stylist</span>
+            <span class="concierge-tag">🌡️ ESP32 Climate</span>
+          </div>
+
+          <div class="concierge-preview-box" id="concierge-preview-text">
+            Generating your personalized daily briefing...
+          </div>
+
+          <div class="concierge-actions">
+            <button type="button" class="btn-concierge-play" id="btn-concierge-mirror" onclick="playBriefingOnMirror()">
+              <span>🔊</span> Play on Mirror
+            </button>
+            <button type="button" class="btn-concierge-phone" id="btn-concierge-phone" onclick="playBriefingOnPhone()">
+              <span>📱</span> Play on Phone
+            </button>
+            <button type="button" class="btn-concierge-stop" id="btn-concierge-stop" onclick="stopBriefingPlayback()">
+              <span>⏹</span> Stop Playback
+            </button>
           </div>
         </div>
-        <button class="btn-ghost" style="padding: 6px 12px; font-size: 0.75rem;" onclick="refreshRemoteData()">Refresh</button>
-      </div>
 
-      <!-- 1-Tap Privacy Toggle -->
-      <div class="privacy-toggle-card" id="privacy-card" onclick="togglePrivacyMode()">
-        <div class="privacy-info">
-          <div class="privacy-icon">🛡️</div>
-          <div>
-            <div class="privacy-title">Privacy Mode</div>
-            <div class="privacy-desc" id="privacy-desc">Camera & personal widgets active</div>
+        <audio id="concierge-phone-audio" style="display: none;"></audio>
+
+        <div class="section-header">
+          <span class="section-title">ESP32 Room Telemetry</span>
+          <span class="section-badge" id="esp32-status-pill">DHT22 Live</span>
+        </div>
+        <div class="telemetry-grid">
+          <div class="telemetry-card">
+            <div class="telem-top">
+              <span>Temperature</span>
+              <span>🌡️</span>
+            </div>
+            <div class="telem-val" id="telem-temp">--°C</div>
+            <div class="telem-sub">Room Sensor</div>
+          </div>
+          <div class="telemetry-card">
+            <div class="telem-top">
+              <span>Humidity</span>
+              <span>💧</span>
+            </div>
+            <div class="telem-val" id="telem-hum">--%</div>
+            <div class="telem-sub">Relative Hum.</div>
+          </div>
+          <div class="telemetry-card">
+            <div class="telem-top">
+              <span>Room Light</span>
+              <span>💡</span>
+            </div>
+            <div class="telem-val" id="telem-light">--</div>
+            <div class="telem-sub">Ambient Lux</div>
+          </div>
+          <div class="telemetry-card">
+            <div class="telem-top">
+              <span>Motion</span>
+              <span>🚶</span>
+            </div>
+            <div class="telem-val" id="telem-motion">Clear</div>
+            <div class="telem-sub">PIR Sensor</div>
           </div>
         </div>
-        <label class="switch">
-          <input type="checkbox" id="privacy-checkbox">
-          <span class="slider"></span>
-        </label>
-      </div>
 
-      <!-- Live ESP32 Hardware Climate Telemetry -->
-      <div class="section-header">
-        <span class="section-title">ESP32 Room Telemetry</span>
-        <span class="section-badge" id="esp32-status-pill">DHT22 Live</span>
-      </div>
-      <div class="telemetry-grid">
-        <div class="telemetry-card">
-          <div class="telem-top">
-            <span>Temperature</span>
-            <span>🌡️</span>
+        <div class="mirror-stylist-card">
+          <div class="section-header" style="margin:0 0 4px;">
+            <span class="section-title">Mirror AI Stylist Feed</span>
+            <span class="section-badge" id="stylist-score-pill">Active</span>
           </div>
-          <div class="telem-val" id="telem-temp">--°C</div>
-          <div class="telem-sub">Room Sensor</div>
-        </div>
-        <div class="telemetry-card">
-          <div class="telem-top">
-            <span>Humidity</span>
-            <span>💧</span>
+          <div class="stylist-advice-text" id="stylist-advice-text">
+            Stand in front of the mirror camera for live outfit feedback and grooming inspection.
           </div>
-          <div class="telem-val" id="telem-hum">--%</div>
-          <div class="telem-sub">Relative Hum.</div>
         </div>
-        <div class="telemetry-card">
-          <div class="telem-top">
-            <span>Room Light</span>
-            <span>💡</span>
+
+        <div class="reminders-card">
+          <div class="section-header" style="margin: 0 0 8px;">
+            <span class="section-title">Mirror Schedule & Reminders</span>
+            <span class="section-badge" id="reminders-badge">0 items</span>
           </div>
-          <div class="telem-val" id="telem-light">--</div>
-          <div class="telem-sub">Ambient Lux</div>
-        </div>
-        <div class="telemetry-card">
-          <div class="telem-top">
-            <span>Motion</span>
-            <span>🚶</span>
+          <div class="reminders-list" id="reminders-list">
+            <div style="font-size:0.8rem; color:var(--ink-dim); text-align:center; padding:10px;">No reminders set.</div>
           </div>
-          <div class="telem-val" id="telem-motion">Clear</div>
-          <div class="telem-sub">PIR Sensor</div>
+          <div class="reminder-form">
+            <input type="text" class="reminder-input" id="new-reminder-title" placeholder="Add reminder..." />
+            <input type="text" class="reminder-time-input" id="new-reminder-time" placeholder="10:30 AM" />
+            <button type="button" class="btn-add-reminder" onclick="addReminder()">Add</button>
+          </div>
         </div>
-      </div>
+      </main>
 
-      <!-- Live Mirror AI Stylist Feed -->
-      <div class="mirror-stylist-card">
-        <div class="stylist-header">
-          <span class="stylist-label">👁️ Mirror Camera Stylist</span>
-          <span class="stylist-score-pill" id="stylist-score-pill">Analyzing</span>
+      <!-- BOTTOM NAVIGATION BAR -->
+      <nav class="bottom-nav">
+        <div class="nav-tab active" data-tab="tab-closet" onclick="switchTab('tab-closet')">
+          <span class="nav-tab-icon">👗</span>
+          <span class="nav-tab-label">Closet</span>
         </div>
-        <div class="stylist-advice-text" id="stylist-advice-text">
-          Stand in front of the mirror camera for live outfit feedback and grooming inspection.
+        <div class="nav-tab scan-nav" data-tab="tab-scan" onclick="switchTab('tab-scan')">
+          <div class="scan-btn-circle">
+            <span class="nav-tab-icon">📷</span>
+          </div>
+          <span class="nav-tab-label">Scan</span>
         </div>
-      </div>
+        <div class="nav-tab" data-tab="tab-remote" onclick="switchTab('tab-remote')">
+          <span class="nav-tab-icon">🪞</span>
+          <span class="nav-tab-label">Remote</span>
+        </div>
+      </nav>
+    </div>
 
-      <!-- Agenda & Reminders Manager -->
-      <div class="reminders-card">
-        <div class="section-header" style="margin: 0 0 8px;">
-          <span class="section-title">Mirror Schedule & Reminders</span>
-          <span class="section-badge" id="reminders-badge">0 items</span>
+    <!-- Registration Modal -->
+    <div class="modal-backdrop" id="register-modal">
+      <div class="modal-sheet">
+        <div class="modal-header">
+          <span class="modal-title">Register User & Face ID</span>
+          <button class="modal-close" onclick="closeRegisterModal()">×</button>
         </div>
-        <div class="reminders-list" id="reminders-list">
-          <div style="font-size:0.8rem; color:var(--ink-dim); text-align:center; padding:10px;">No reminders set.</div>
-        </div>
-        <div class="reminder-form">
-          <input type="text" class="reminder-input" id="new-reminder-title" placeholder="Add reminder..." />
-          <input type="text" class="reminder-time-input" id="new-reminder-time" placeholder="10:30 AM" />
-          <button type="button" class="btn-add-reminder" onclick="addReminder()">Add</button>
-        </div>
-      </div>
 
-    </main>
-
-    <!-- ═══ BOTTOM NAVIGATION ═══ -->
-    <nav class="bottom-nav">
-      <div class="nav-tab active" data-tab="tab-closet" onclick="switchTab('tab-closet')">
-        <span class="nav-tab-icon">👗</span>
-        <span class="nav-tab-label">Closet</span>
-      </div>
-      <div class="nav-tab scan-nav" data-tab="tab-scan" onclick="switchTab('tab-scan')">
-        <div class="scan-btn-circle">
-          <span class="nav-tab-icon">📷</span>
+        <div class="form-group">
+          <label class="form-label">Display Name *</label>
+          <input type="text" class="form-input" id="reg-name" placeholder="e.g. Rohan, Sarah, Ayush" />
         </div>
-        <span class="nav-tab-label">Scan</span>
+
+        <div class="form-group">
+          <label class="form-label">Preferred Style</label>
+          <select class="form-select" id="reg-style">
+            <option value="Casual">Casual / Everyday</option>
+            <option value="Streetwear">Streetwear & Modern</option>
+            <option value="Formal">Formal & Business</option>
+            <option value="Sporty">Athletic & Sporty</option>
+            <option value="Minimalist">Minimalist / Clean</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Hair Preference Note</label>
+          <input type="text" class="form-input" id="reg-hair" placeholder="e.g. Textured Crop, Fade, Wavy" />
+        </div>
+
+        <div class="selfie-card">
+          <img class="selfie-preview-img" id="selfie-preview" src="" alt="Selfie" />
+          <div id="selfie-action-box">
+            <span style="font-size: 1.8rem; display:block; margin-bottom:6px;">🤳</span>
+            <button type="button" class="selfie-camera-btn" onclick="triggerSelfieCapture()">
+              Take Face Selfie
+            </button>
+            <p style="font-size:0.72rem; color:var(--ink-dim); margin-top:6px;">
+              YuNet + SFace will extract a 128-D facial feature vector so the Smart Mirror and Web App recognize you automatically.
+            </p>
+          </div>
+          <input type="file" accept="image/*" capture="user" id="selfie-file-input" style="display: none;" />
+        </div>
+
+        <div class="form-actions-row">
+          <button type="button" class="btn-ghost" onclick="closeRegisterModal()">Cancel</button>
+          <button type="button" class="btn-submit" id="btn-submit-register" onclick="submitRegisterUser()">Register Profile</button>
+        </div>
       </div>
-      <div class="nav-tab" data-tab="tab-users" onclick="switchTab('tab-users')">
-        <span class="nav-tab-icon">👤</span>
-        <span class="nav-tab-label">Users</span>
-      </div>
-      <div class="nav-tab" data-tab="tab-remote" onclick="switchTab('tab-remote')">
-        <span class="nav-tab-icon">🪞</span>
-        <span class="nav-tab-label">Remote</span>
-      </div>
-    </nav>
+    </div>
 
   </div>
 
   <script>
     /* ═══════════════════════════════════════════════
-       STATE & CONSTANTS
+       STATE & VARIABLES
        ═══════════════════════════════════════════════ */
     let currentTab = 'tab-closet';
     let allWardrobeItems = [];
     let currentFilter = 'all';
-    let activeUserId = 'guest';
-    let activeUserName = 'Guest';
+    // Always start at Gatekeeper login on page load so login step is strictly first
+    let activeUserId = null;
+    let activeUserName = null;
+    let allUsersCache = [];
     let pendingScanFile = null;
     let pendingSelfieFile = null;
-    let telemetryTimer = null;
+    let lastCapturedSelfieForReg = null;
 
     const CATEGORY_ICONS = {
       top: '👕', bottom: '👖', footwear: '👟', outerwear: '🧥', accessory: '💍'
@@ -1595,8 +1345,174 @@
     };
 
     /* ═══════════════════════════════════════════════
-       NAVIGATION
+       STAGE 1: GATEWAY & FACE ID LOGIN
        ═══════════════════════════════════════════════ */
+    function checkGateState() {
+      const gate = document.getElementById('gate-screen');
+      const app = document.getElementById('dashboard-app');
+
+      if (!activeUserId) {
+        // Show login gate ONLY
+        gate.classList.remove('hidden');
+        app.classList.remove('visible');
+        resetGateUI();
+      } else {
+        // User is logged in: show dashboard app ONLY
+        gate.classList.add('hidden');
+        app.classList.add('visible');
+        loadUserData();
+      }
+    }
+
+    function resetGateUI() {
+      const box = document.getElementById('biometric-box');
+      box.className = 'biometric-box';
+      document.getElementById('gate-icon-visual').style.display = 'block';
+      document.getElementById('gate-avatar-success').style.display = 'none';
+      document.getElementById('gate-status-text').textContent = 'Look into camera & tap to scan';
+      document.getElementById('gate-status-text').style.color = 'var(--ember)';
+      document.getElementById('gate-alert-box').className = 'gate-alert-card';
+      document.getElementById('btn-gate-scan').disabled = false;
+      document.getElementById('btn-gate-scan').innerHTML = '<span>📷</span> Scan Face to Unlock';
+    }
+
+    function triggerFaceAuth() {
+      document.getElementById('gate-file-input').click();
+    }
+
+    async function processFaceAuthFile(file) {
+      if (!file) return;
+      lastCapturedSelfieForReg = file;
+
+      const box = document.getElementById('biometric-box');
+      const statusText = document.getElementById('gate-status-text');
+      const btn = document.getElementById('btn-gate-scan');
+      const alertBox = document.getElementById('gate-alert-box');
+
+      box.className = 'biometric-box scanning';
+      statusText.textContent = 'Verifying face with YuNet + SFace...';
+      statusText.style.color = 'var(--ember)';
+      btn.disabled = true;
+      btn.innerHTML = '<span>⏳</span> Verifying Face...';
+      alertBox.className = 'gate-alert-card';
+
+      const formData = new FormData();
+      formData.append('photo', file);
+
+      try {
+        const res = await fetch('/api/auth/face-login', { method: 'POST', body: formData });
+        const data = await res.json();
+
+        if (data.status === 'ok' && data.user) {
+          // ── RECOGNIZED & LOGGED IN ──
+          box.className = 'biometric-box success';
+          document.getElementById('gate-icon-visual').style.display = 'none';
+          const av = document.getElementById('gate-avatar-success');
+          av.src = data.user.avatar_url || `/avatar/${data.user.id}`;
+          av.style.display = 'block';
+
+          statusText.textContent = `✨ ${data.message || 'Face Recognized!'}`;
+          statusText.style.color = 'var(--ok)';
+
+          activeUserId = data.user.id;
+          activeUserName = data.user.name;
+          sessionStorage.setItem('reflectai_user_id', activeUserId);
+          sessionStorage.setItem('reflectai_user_name', activeUserName);
+          localStorage.setItem('reflectai_last_user_id', activeUserId);
+          localStorage.setItem('reflectai_last_user_name', activeUserName);
+
+          showToast(`Welcome, ${data.user.name}!`, 'success');
+
+          // Transition to Stage 2 after 700ms
+          setTimeout(() => {
+            checkGateState();
+          }, 700);
+
+        } else if (data.status === 'not_registered') {
+          // ── UNREGISTERED FACE ──
+          box.className = 'biometric-box failed';
+          statusText.textContent = 'Face not recognized';
+          statusText.style.color = 'var(--danger)';
+
+          alertBox.className = 'gate-alert-card unregistered';
+          document.getElementById('gate-alert-title').textContent = '⚠️ Face Not Registered';
+          document.getElementById('gate-alert-desc').textContent = 'Your face was detected, but you are not registered in ReflectAI yet. Tap below to register!';
+          document.getElementById('gate-alert-btn').textContent = '👉 Register Profile & Face ID';
+          document.getElementById('gate-alert-btn').onclick = openRegistrationFromGate;
+
+          btn.disabled = false;
+          btn.innerHTML = '<span>🔄</span> Try Scanning Again';
+
+        } else {
+          // ── NO FACE DETECTED ──
+          box.className = 'biometric-box failed';
+          statusText.textContent = 'No face detected in photo';
+          statusText.style.color = 'var(--danger)';
+
+          alertBox.className = 'gate-alert-card noface';
+          document.getElementById('gate-alert-title').textContent = '⚠️ No Face Detected';
+          document.getElementById('gate-alert-desc').textContent = 'Please make sure your face is centered, well-lit, and look directly into the camera.';
+          document.getElementById('gate-alert-btn').textContent = '🔄 Try Again';
+          document.getElementById('gate-alert-btn').onclick = triggerFaceAuth;
+
+          btn.disabled = false;
+          btn.innerHTML = '<span>🔄</span> Retry Scan';
+        }
+
+      } catch (err) {
+        console.error('Face auth error:', err);
+        box.className = 'biometric-box failed';
+        statusText.textContent = 'Network error — please retry';
+        statusText.style.color = 'var(--danger)';
+        btn.disabled = false;
+        btn.innerHTML = '<span>🔄</span> Retry Scan';
+      }
+    }
+
+    document.getElementById('gate-file-input').addEventListener('change', function() {
+      if (this.files.length) {
+        processFaceAuthFile(this.files[0]);
+        this.value = '';
+      }
+    });
+
+    document.getElementById('gate-file-gallery').addEventListener('change', function() {
+      if (this.files.length) {
+        processFaceAuthFile(this.files[0]);
+        this.value = '';
+      }
+    });
+
+    function openRegistrationFromGate() {
+      openRegisterModal();
+      if (lastCapturedSelfieForReg) {
+        pendingSelfieFile = lastCapturedSelfieForReg;
+        const preview = document.getElementById('selfie-preview');
+        preview.src = URL.createObjectURL(lastCapturedSelfieForReg);
+        preview.style.display = 'block';
+        document.getElementById('selfie-action-box').style.display = 'none';
+      }
+    }
+
+    function logoutToGate() {
+      activeUserId = null;
+      activeUserName = null;
+      sessionStorage.removeItem('reflectai_user_id');
+      sessionStorage.removeItem('reflectai_user_name');
+      showToast('Logged out', 'success');
+      checkGateState();
+    }
+
+    /* ═══════════════════════════════════════════════
+       STAGE 2: DASHBOARD FUNCTIONS
+       ═══════════════════════════════════════════════ */
+    function loadUserData() {
+      document.getElementById('top-user-name').textContent = activeUserName;
+      document.getElementById('top-user-avatar').src = `/avatar/${activeUserId}`;
+
+      loadWardrobe();
+    }
+
     function switchTab(tabId) {
       currentTab = tabId;
       document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -1607,15 +1523,11 @@
 
       if (tabId === 'tab-closet') {
         loadWardrobe();
-        loadOutfitRecommendation();
-      } else if (tabId === 'tab-users') {
-        loadUsers();
       } else if (tabId === 'tab-remote') {
         refreshRemoteData();
       }
     }
 
-    /* ── Toast Messages ── */
     function showToast(text, type = 'success') {
       const toast = document.getElementById('toast');
       toast.textContent = text;
@@ -1624,10 +1536,9 @@
       setTimeout(() => toast.classList.remove('visible'), 2800);
     }
 
-    /* ═══════════════════════════════════════════════
-       TAB 1: CLOSET & OUTFIT
-       ═══════════════════════════════════════════════ */
+    /* ── Closet ── */
     async function loadWardrobe() {
+      if (!activeUserId) return;
       try {
         const res = await fetch(`/api/wardrobe?user_id=${encodeURIComponent(activeUserId)}`);
         const data = await res.json();
@@ -1694,7 +1605,6 @@
         if (data.status === 'ok') {
           showToast('Garment removed', 'success');
           loadWardrobe();
-          loadOutfitRecommendation();
         } else {
           showToast(data.error || 'Failed to remove', 'error');
         }
@@ -1703,7 +1613,6 @@
       }
     }
 
-    // Category Filter bar clicks
     document.getElementById('category-tabs').addEventListener('click', (e) => {
       const tab = e.target.closest('.cat-tab');
       if (!tab) return;
@@ -1713,28 +1622,7 @@
       renderWardrobeGrid();
     });
 
-    async function loadOutfitRecommendation() {
-      try {
-        const res = await fetch(`/api/outfit?user_id=${encodeURIComponent(activeUserId)}`);
-        const data = await res.json();
-        if (data && data.outfit) {
-          const rec = data.outfit;
-          document.getElementById('rec-top-name').textContent = rec.top?.name || 'Any Top';
-          document.getElementById('rec-bottom-name').textContent = rec.bottom?.name || 'Any Bottom';
-          document.getElementById('rec-shoes-name').textContent = rec.footwear?.name || 'Any Shoes';
-          document.getElementById('rec-reason-text').textContent = data.reason || 'Curated for today based on your active style and climate.';
-          if (data.weather) {
-            document.getElementById('outfit-weather-tag').textContent = `${data.weather.temp}°C · ${data.weather.condition}`;
-          }
-        }
-      } catch (err) {
-        console.warn('Outfit engine lookup:', err);
-      }
-    }
-
-    /* ═══════════════════════════════════════════════
-       TAB 2: SCAN & AI CLASSIFY
-       ═══════════════════════════════════════════════ */
+    /* ── Garment Scanner ── */
     function triggerScanInput() {
       document.getElementById('scan-file-input').click();
     }
@@ -1749,12 +1637,8 @@
       const card = document.getElementById('detect-card');
 
       target.classList.add('scanning');
+      document.getElementById('detect-preview').src = URL.createObjectURL(file);
 
-      // Show preview
-      const previewUrl = URL.createObjectURL(file);
-      document.getElementById('detect-preview').src = previewUrl;
-
-      // Call AI classification
       const formData = new FormData();
       formData.append('image', file);
 
@@ -1778,7 +1662,6 @@
         card.classList.add('visible');
       } catch (e) {
         target.classList.remove('scanning');
-        // Manual entry fallback
         document.getElementById('det-name').value = '';
         document.getElementById('det-category').value = 'top';
         document.getElementById('det-color').value = '';
@@ -1852,103 +1735,6 @@
       btn.textContent = 'Add to Wardrobe';
     }
 
-    /* ═══════════════════════════════════════════════
-       TAB 3: USERS & FACE ID
-       ═══════════════════════════════════════════════ */
-    async function loadUsers() {
-      try {
-        const res = await fetch('/api/users');
-        const data = await res.json();
-        activeUserId = data.active_user || 'guest';
-
-        const users = data.users || [];
-        document.getElementById('profiles-count').textContent = `${users.length} profile${users.length !== 1 ? 's' : ''}`;
-
-        // Find active user record
-        const activeRec = users.find(u => u.id === activeUserId) || { name: activeUserId, id: activeUserId, preferred_style: 'Casual' };
-        activeUserName = activeRec.name;
-        document.getElementById('top-user-name').textContent = activeRec.name;
-        document.getElementById('top-user-avatar').src = `/avatar/${activeRec.id}`;
-        document.getElementById('banner-user-name').textContent = activeRec.name;
-        document.getElementById('banner-user-avatar').src = `/avatar/${activeRec.id}`;
-        document.getElementById('banner-user-style').textContent = `Style: ${activeRec.preferred_style || 'Casual'} · Mirror synced`;
-
-        // Render user list
-        const container = document.getElementById('users-container');
-        container.innerHTML = users.map(u => {
-          const isCurrent = u.id === activeUserId;
-          const faceBadge = u.has_face
-            ? `<span class="badge-chip has-face">🟢 Face ID Enrolled</span>`
-            : `<span class="badge-chip">⚪ No Face ID</span>`;
-          const countBadge = `<span class="badge-chip">👗 ${u.wardrobe_count || 0} items</span>`;
-          const styleBadge = `<span class="badge-chip">🎨 ${u.preferred_style || 'Casual'}</span>`;
-
-          const switchBtn = isCurrent
-            ? `<button class="btn-switch-user active">Active</button>`
-            : `<button class="btn-switch-user" onclick="switchActiveUser('${u.id}', '${escapeHtml(u.name)}')">Switch</button>`;
-
-          const deleteBtn = (u.id.toLowerCase() !== 'guest' && u.id.toLowerCase() !== 'user1' && u.id.toLowerCase() !== 'user2')
-            ? `<button class="btn-delete-user" onclick="deleteUser('${u.id}')" title="Delete Profile">×</button>`
-            : '';
-
-          return `
-            <div class="user-card ${isCurrent ? 'current' : ''}">
-              <img class="user-card-avatar" src="/avatar/${u.id}" alt="${u.name}" />
-              <div class="user-card-info">
-                <div class="user-card-title">${escapeHtml(u.name)}</div>
-                <div class="user-card-meta">
-                  ${faceBadge}
-                  ${countBadge}
-                  ${styleBadge}
-                </div>
-              </div>
-              <div class="user-card-actions">
-                ${switchBtn}
-                ${deleteBtn}
-              </div>
-            </div>
-          `;
-        }).join('');
-      } catch (err) {
-        console.error('Failed to load users:', err);
-      }
-    }
-
-    async function switchActiveUser(userId, name) {
-      try {
-        const res = await fetch('/api/user/active', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId, name })
-        });
-        const data = await res.json();
-        if (data.status === 'ok') {
-          showToast(`Switched mirror to ${name}!`, 'success');
-          loadUsers();
-          loadWardrobe();
-          loadOutfitRecommendation();
-        }
-      } catch (e) {
-        showToast('Failed to switch user', 'error');
-      }
-    }
-
-    async function deleteUser(userId) {
-      if (!confirm(`Delete profile '${userId}' and all associated face data?`)) return;
-      try {
-        const res = await fetch(`/api/user/delete/${encodeURIComponent(userId)}`, { method: 'POST' });
-        const data = await res.json();
-        if (data.status === 'ok') {
-          showToast('Profile deleted', 'success');
-          loadUsers();
-        } else {
-          showToast(data.error || 'Failed to delete', 'error');
-        }
-      } catch (e) {
-        showToast('Network error', 'error');
-      }
-    }
-
     function openRegisterModal() {
       document.getElementById('register-modal').classList.add('open');
       pendingSelfieFile = null;
@@ -2003,11 +1789,20 @@
             : `User ${name} registered!`;
           showToast(msg, 'success');
           closeRegisterModal();
-          // Reset fields
+
+          activeUserId = data.user_id;
+          activeUserName = name;
+          sessionStorage.setItem('reflectai_user_id', activeUserId);
+          sessionStorage.setItem('reflectai_user_name', activeUserName);
+          localStorage.setItem('reflectai_last_user_id', activeUserId);
+          localStorage.setItem('reflectai_last_user_name', activeUserName);
+
           document.getElementById('reg-name').value = '';
           document.getElementById('reg-hair').value = '';
           pendingSelfieFile = null;
-          loadUsers();
+          lastCapturedSelfieForReg = null;
+
+          checkGateState();
         } else {
           showToast(data.error || 'Failed to register', 'error');
         }
@@ -2019,20 +1814,156 @@
       btn.textContent = 'Register Profile';
     }
 
-    /* ═══════════════════════════════════════════════
-       TAB 4: REMOTE & TELEMETRY
-       ═══════════════════════════════════════════════ */
+    /* ── Voice Concierge Briefing Functions ── */
+    let currentBriefingData = null;
+    let isPhoneBriefingPlaying = false;
+
+    async function loadBriefingPreview(forceRefresh = false) {
+      if (!activeUserId) return;
+      const previewEl = document.getElementById('concierge-preview-text');
+      if (!previewEl) return;
+
+      if (!currentBriefingData || forceRefresh) {
+        try {
+          const res = await fetch(`/api/voice/briefing?user_id=${encodeURIComponent(activeUserId)}`);
+          const data = await res.json();
+          if (data && data.full_text) {
+            currentBriefingData = data;
+            previewEl.textContent = `"${data.full_text}"`;
+          }
+        } catch (e) {
+          console.warn('Could not load briefing preview:', e);
+        }
+      }
+    }
+
+    async function playBriefingOnMirror() {
+      if (!activeUserId) return;
+      const badgeEl = document.getElementById('concierge-status-badge');
+      const btnMirror = document.getElementById('btn-concierge-mirror');
+
+      badgeEl.className = 'concierge-status-badge speaking';
+      badgeEl.textContent = 'Speaking on Mirror 🔊';
+      btnMirror.disabled = true;
+
+      try {
+        const res = await fetch('/api/voice/briefing/play', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: activeUserId, target: 'mirror' })
+        });
+        const data = await res.json();
+        if (data.status === 'ok') {
+          showToast('Briefing playing on Mirror display', 'success');
+          if (data.briefing && data.briefing.full_text) {
+            document.getElementById('concierge-preview-text').textContent = `"${data.briefing.full_text}"`;
+          }
+        } else {
+          showToast('Failed to start mirror briefing', 'error');
+          badgeEl.className = 'concierge-status-badge';
+          badgeEl.textContent = 'Ready';
+        }
+      } catch (e) {
+        showToast('Network error triggering briefing', 'error');
+        badgeEl.className = 'concierge-status-badge';
+        badgeEl.textContent = 'Ready';
+      } finally {
+        setTimeout(() => {
+          btnMirror.disabled = false;
+        }, 1500);
+      }
+    }
+
+    async function playBriefingOnPhone() {
+      if (!activeUserId) return;
+      const audioEl = document.getElementById('concierge-phone-audio');
+      const badgeEl = document.getElementById('concierge-status-badge');
+      const btnPhone = document.getElementById('btn-concierge-phone');
+
+      if (isPhoneBriefingPlaying) {
+        audioEl.pause();
+        audioEl.currentTime = 0;
+        isPhoneBriefingPlaying = false;
+        btnPhone.innerHTML = '<span>📱</span> Play on Phone';
+        badgeEl.className = 'concierge-status-badge';
+        badgeEl.textContent = 'Ready';
+        return;
+      }
+
+      badgeEl.className = 'concierge-status-badge speaking';
+      badgeEl.textContent = 'Streaming Audio...';
+      btnPhone.innerHTML = '<span>⏳</span> Loading...';
+
+      const audioUrl = `/api/voice/briefing/audio?user_id=${encodeURIComponent(activeUserId)}&t=${Date.now()}`;
+      audioEl.src = audioUrl;
+
+      audioEl.onplay = () => {
+        isPhoneBriefingPlaying = true;
+        badgeEl.className = 'concierge-status-badge active';
+        badgeEl.textContent = 'Playing on Phone 📱';
+        btnPhone.innerHTML = '<span>⏸</span> Pause Phone';
+      };
+
+      audioEl.onended = () => {
+        isPhoneBriefingPlaying = false;
+        badgeEl.className = 'concierge-status-badge';
+        badgeEl.textContent = 'Ready';
+        btnPhone.innerHTML = '<span>📱</span> Play on Phone';
+      };
+
+      audioEl.onerror = () => {
+        isPhoneBriefingPlaying = false;
+        badgeEl.className = 'concierge-status-badge';
+        badgeEl.textContent = 'Ready';
+        btnPhone.innerHTML = '<span>📱</span> Play on Phone';
+        showToast('Could not play audio on phone', 'error');
+      };
+
+      try {
+        await audioEl.play();
+      } catch (err) {
+        console.warn('Audio play error:', err);
+        showToast('Tap again to allow audio playback', 'info');
+        btnPhone.innerHTML = '<span>📱</span> Play on Phone';
+        badgeEl.className = 'concierge-status-badge';
+        badgeEl.textContent = 'Ready';
+      }
+    }
+
+    async function stopBriefingPlayback() {
+      const audioEl = document.getElementById('concierge-phone-audio');
+      if (audioEl) {
+        audioEl.pause();
+        audioEl.currentTime = 0;
+      }
+      isPhoneBriefingPlaying = false;
+      const btnPhone = document.getElementById('btn-concierge-phone');
+      if (btnPhone) btnPhone.innerHTML = '<span>📱</span> Play on Phone';
+
+      const badgeEl = document.getElementById('concierge-status-badge');
+      if (badgeEl) {
+        badgeEl.className = 'concierge-status-badge';
+        badgeEl.textContent = 'Ready';
+      }
+
+      try {
+        await fetch('/api/voice/stop', { method: 'POST' });
+        showToast('Briefing stopped', 'info');
+      } catch (e) {
+        console.warn('Stop voice error:', e);
+      }
+    }
+
+    /* ── Remote & Telemetry ── */
     async function refreshRemoteData() {
       try {
         const res = await fetch('/api/status');
         const data = await res.json();
 
-        // 1. Connection status
         const isOnline = data.system?.camera_status === 'online' || data.sensors?.status === 'online' || true;
         document.getElementById('remote-conn-dot').className = `status-indicator-dot ${isOnline ? '' : 'offline'}`;
-        document.getElementById('remote-conn-sub').textContent = `Mirror: Online · Active: ${data.user?.name || 'Guest'}`;
+        document.getElementById('remote-conn-sub').textContent = `Mirror: Online · Active: ${data.user?.name || activeUserName}`;
 
-        // 2. Privacy Mode
         const privacyMode = Boolean(data.privacy_mode);
         document.getElementById('privacy-checkbox').checked = privacyMode;
         document.getElementById('privacy-card').className = `privacy-toggle-card ${privacyMode ? 'active' : ''}`;
@@ -2040,7 +1971,22 @@
           ? 'Camera & AI analysis PAUSED on mirror'
           : 'Camera & personal widgets active';
 
-        // 3. ESP32 Hardware Telemetry
+        // Update concierge badge from mirror voice state if playing
+        if (data.voice && data.voice.state === 'speaking') {
+          const badgeEl = document.getElementById('concierge-status-badge');
+          if (badgeEl && !isPhoneBriefingPlaying) {
+            badgeEl.className = 'concierge-status-badge speaking';
+            badgeEl.textContent = 'Speaking on Mirror 🔊';
+          }
+        } else if (!isPhoneBriefingPlaying) {
+          const badgeEl = document.getElementById('concierge-status-badge');
+          if (badgeEl && badgeEl.textContent.includes('Mirror')) {
+            badgeEl.className = 'concierge-status-badge';
+            badgeEl.textContent = 'Ready';
+          }
+        }
+        loadBriefingPreview();
+
         if (data.sensors) {
           const s = data.sensors;
           document.getElementById('telem-temp').textContent = s.temperature !== null && s.temperature !== undefined ? `${s.temperature}°C` : '--°C';
@@ -2050,7 +1996,6 @@
           document.getElementById('esp32-status-pill').textContent = s.status === 'online' ? 'ESP32 Online' : 'Mock Mode';
         }
 
-        // 4. Mirror Stylist Feedback
         if (data.stylist) {
           const st = data.stylist;
           document.getElementById('stylist-score-pill').textContent = st.assessment ? `Harmony ${st.assessment.harmony_score || 90}%` : 'Active';
@@ -2077,6 +2022,7 @@
     }
 
     async function loadReminders() {
+      if (!activeUserId) return;
       try {
         const res = await fetch(`/api/reminders?user_id=${encodeURIComponent(activeUserId)}`);
         const data = await res.json();
@@ -2143,9 +2089,6 @@
       }
     }
 
-    /* ═══════════════════════════════════════════════
-       HELPERS & AUTO-POLLING
-       ═══════════════════════════════════════════════ */
     function escapeHtml(text) {
       if (!text) return '';
       return String(text)
@@ -2156,17 +2099,14 @@
         .replace(/'/g, '&#039;');
     }
 
-    // Auto-poll telemetry when in remote tab (every 4s)
     setInterval(() => {
-      if (currentTab === 'tab-remote') {
+      if (activeUserId && currentTab === 'tab-remote') {
         refreshRemoteData();
       }
     }, 4000);
 
-    // Initial load
-    loadUsers();
-    loadWardrobe();
-    loadOutfitRecommendation();
+    // Run initial state check
+    checkGateState();
   </script>
 </body>
 </html>

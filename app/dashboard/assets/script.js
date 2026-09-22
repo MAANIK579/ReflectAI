@@ -134,21 +134,41 @@ async function updateStatus() {
     // Privacy mode takes visual precedence — banner shows whenever active.
     privacyBannerEl.style.display = data.privacy_mode ? 'block' : 'none';
 
-    // Voice assistant overlay
+    // Voice concierge & assistant overlay
     const voiceOverlayEl = document.getElementById('voice-overlay');
     const voiceDotEl = document.getElementById('voice-dot');
     const voiceStateTextEl = document.getElementById('voice-state-text');
     const voiceTranscriptEl = document.getElementById('voice-transcript');
     const voiceReplyEl = document.getElementById('voice-reply');
+    const soundwaveBarsEl = document.getElementById('soundwave-bars');
 
     if (data.voice && data.voice.state && data.voice.state !== 'idle') {
       voiceOverlayEl.style.display = 'block';
-      voiceDotEl.className = 'voice-dot ' + data.voice.state;
-      voiceStateTextEl.textContent = data.voice.state + '...';
-      voiceTranscriptEl.textContent = data.voice.text ? `"${data.voice.text}"` : '';
-      voiceReplyEl.textContent = data.voice.reply || '';
+      if (voiceDotEl) voiceDotEl.className = 'voice-dot ' + data.voice.state;
+      if (soundwaveBarsEl) {
+        if (data.voice.state === 'speaking') {
+          soundwaveBarsEl.classList.add('active');
+        } else {
+          soundwaveBarsEl.classList.remove('active');
+        }
+      }
+      if (voiceStateTextEl) {
+        voiceStateTextEl.textContent = data.voice.state === 'speaking' ? 'Speaking Briefing...' : (data.voice.state + '...');
+      }
+      if (voiceTranscriptEl) {
+        if (data.voice.text && data.voice.text !== 'Voice Concierge Briefing') {
+          voiceTranscriptEl.style.display = 'block';
+          voiceTranscriptEl.textContent = `"${data.voice.text}"`;
+        } else {
+          voiceTranscriptEl.style.display = 'none';
+        }
+      }
+      if (voiceReplyEl) {
+        voiceReplyEl.textContent = data.voice.reply || '';
+      }
     } else {
       voiceOverlayEl.style.display = 'none';
+      if (soundwaveBarsEl) soundwaveBarsEl.classList.remove('active');
     }
 
     // Live Camera Clothing & AI Stylist pill

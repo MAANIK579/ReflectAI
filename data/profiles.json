@@ -18,25 +18,6 @@
       "Local weather outlook"
     ]
   },
-  "krishna": {
-    "id": "krishna",
-    "name": "KRISHNA",
-    "greeting_name": "KRISHNA",
-    "outfit": [
-      "Black T-Shirt",
-      "Blue Jeans",
-      "White Sneakers"
-    ],
-    "hair": "Textured Crop",
-    "calendar": [
-      "10:30 AM \u00b7 Project Review",
-      "04:00 PM \u00b7 Gym & Workout"
-    ],
-    "news": [
-      "Tech updates & innovations",
-      "Local weather outlook"
-    ]
-  },
   "ayush": {
     "id": "ayush",
     "name": "AYUSH",
@@ -65,7 +46,7 @@
       "Blue Jeans",
       "White Sneakers"
     ],
-    "hair": "Textured Crop",
+    "hair": "",
     "calendar": [
       "10:30 AM \u00b7 Project Review",
       "04:00 PM \u00b7 Gym & Workout"
