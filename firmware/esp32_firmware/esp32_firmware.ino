@@ -18,7 +18,7 @@ const char* WIFI_SSID = "Airtel_AP Wifi";
 const char* WIFI_PASSWORD = "Sdr@3232";
 
 const char* PI_STATE_URL =
-  "http://192.168.1.11:5000/api/esp32/state";
+  "http://192.168.1.14:5000/api/esp32/state";
 
 // Use the SAME token that is currently working
 const char* PI_SHARED_TOKEN =
