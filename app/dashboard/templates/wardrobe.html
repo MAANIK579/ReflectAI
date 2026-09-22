@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>ReflectAI — My Wardrobe</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --surface: #161616;
+      --surface-2: #1e1e1e;
+      --ink: #f0ede6;
+      --ink-dim: #8b8b85;
+      --ink-faint: #555550;
+      --ember: #e8b76d;
+      --ember-glow: rgba(232, 183, 109, 0.25);
+      --ok: #6fae7f;
+      --danger: #e85d5d;
+      --border: rgba(240,237,230,0.10);
+      --border-light: rgba(240,237,230,0.06);
+      --glass: rgba(22,22,22,0.85);
+      --radius: 16px;
+      --radius-sm: 12px;
+      --radius-xs: 8px;
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: 'Inter', -apple-system, sans-serif;
+      min-height: 100vh;
+      min-height: 100dvh;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Page Container ── */
+    .app {
+      max-width: 480px;
+      margin: 0 auto;
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* ── Views ── */
+    .view { display: none; flex-direction: column; flex: 1; }
+    .view.active { display: flex; }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px 12px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: var(--bg);
+    }
+    .header-title {
+      font-family: 'Space Grotesk', sans-serif;
+      font-weight: 500;
+      font-size: 1.35rem;
+      letter-spacing: -0.01em;
+    }
+    .header-count {
+      font-size: 0.75rem;
+      color: var(--ink-dim);
+      background: var(--surface);
+      padding: 4px 10px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+    }
+
+    /* ═══════════════════════════════════════════════
+       VIEW 1: CAMERA (Scan Clothing)
+       ═══════════════════════════════════════════════ */
+
+    .camera-view {
+      padding: 0 20px;
+      padding-bottom: calc(80px + var(--safe-bottom));
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .scan-hero {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 24px;
+      width: 100%;
+      max-height: 480px;
+    }
+
+    .scan-ring {
+      position: relative;
+      width: 200px;
+      height: 200px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: transform 0.2s ease;
+    }
+    .scan-ring:active { transform: scale(0.95); }
+    .scan-ring::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 3px solid var(--ember);
+      opacity: 0.7;
+    }
+    .scan-ring::after {
+      content: '';
+      position: absolute;
+      inset: -8px;
+      border-radius: 50%;
+      border: 1px solid var(--ember);
+      opacity: 0.2;
+    }
+    .scan-ring .ring-inner {
+      width: 170px;
+      height: 170px;
+      border-radius: 50%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+    .scan-ring .ring-icon {
+      font-size: 2.8rem;
+      line-height: 1;
+    }
+    .scan-ring .ring-label {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 0.9rem;
+      color: var(--ember);
+      font-weight: 500;
+    }
+
+    /* Pulse animation when scanning */
+    .scan-ring.scanning::before {
+      animation: pulse-ring 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse-ring {
+      0%, 100% { opacity: 0.7; inset: 0; }
+      50% { opacity: 0.3; inset: -12px; }
+    }
+
+    .scan-subtitle {
+      font-size: 0.85rem;
+      color: var(--ink-dim);
+      text-align: center;
+      line-height: 1.5;
+    }
+
+    .scan-file-input { display: none; }
+
+    /* ── AI Detection Result Card ── */
+    .detect-card {
+      display: none;
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-top: 8px;
+      animation: slideUp 0.3s ease-out;
+    }
+    .detect-card.visible { display: block; }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .detect-preview {
+      width: 100%;
+      height: 200px;
+      object-fit: cover;
+      display: block;
+      background: var(--bg);
+    }
+    .detect-body { padding: 16px; }
+    .detect-ai-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--ember-glow);
+      color: var(--ember);
+      font-size: 0.75rem;
+      font-weight: 500;
+      padding: 4px 10px;
+      border-radius: 20px;
+      margin-bottom: 12px;
+    }
+    .detect-fields {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .detect-field label {
+      display: block;
+      font-size: 0.7rem;
+      color: var(--ink-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 4px;
+    }
+    .detect-field input,
+    .detect-field select {
+      width: 100%;
+      padding: 10px 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xs);
+      color: var(--ink);
+      font-size: 0.9rem;
+      font-family: 'Inter', sans-serif;
+    }
+    .detect-field input:focus,
+    .detect-field select:focus {
+      outline: none;
+      border-color: var(--ember);
+    }
+
+    .detect-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+    }
+    .btn-confirm {
+      flex: 1;
+      padding: 13px;
+      background: var(--ember);
+      color: #0a0a0a;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .btn-confirm:active { opacity: 0.8; }
+    .btn-confirm:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-cancel {
+      padding: 13px 20px;
+      background: transparent;
+      color: var(--ink-dim);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+    .btn-cancel:active { background: var(--surface-2); }
+
+    /* Loading spinner overlay for scan button */
+    .scan-ring.scanning .ring-icon { display: none; }
+    .scan-ring.scanning .ring-label { display: none; }
+    .scan-ring.scanning .ring-spinner { display: block; }
+    .ring-spinner {
+      display: none;
+      width: 40px; height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--ember);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ═══════════════════════════════════════════════
+       VIEW 2: CLOSET (Your Items)
+       ═══════════════════════════════════════════════ */
+
+    .closet-view {
+      padding: 0 16px;
+      padding-bottom: calc(80px + var(--safe-bottom));
+      flex: 1;
+    }
+
+    /* Category Tabs */
+    .tabs {
+      display: flex;
+      gap: 8px;
+      padding: 0 4px 14px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+    .tabs::-webkit-scrollbar { display: none; }
+    .tab {
+      padding: 7px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      color: var(--ink-dim);
+      font-size: 0.8rem;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+      font-family: 'Inter', sans-serif;
+    }
+    .tab.active {
+      background: var(--ember);
+      color: #0a0a0a;
+      border-color: var(--ember);
+      font-weight: 500;
+    }
+
+    /* Items Grid */
+    .items-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+    .item-card {
+      background: var(--surface);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius);
+      overflow: hidden;
+      position: relative;
+      transition: transform 0.15s ease;
+    }
+    .item-card:active { transform: scale(0.97); }
+    .item-card img {
+      width: 100%;
+      height: 140px;
+      object-fit: cover;
+      display: block;
+    }
+    .item-card .no-img {
+      width: 100%;
+      height: 140px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+      color: var(--ink-faint);
+      font-size: 2.4rem;
+    }
+    .item-info { padding: 10px 12px; }
+    .item-name {
+      font-size: 0.85rem;
+      font-weight: 500;
+      margin-bottom: 3px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .item-meta {
+      font-size: 0.72rem;
+      color: var(--ink-dim);
+      text-transform: capitalize;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .item-color-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .btn-delete {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: rgba(0,0,0,0.65);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border: 1px solid rgba(232,93,93,0.35);
+      color: var(--danger);
+      font-size: 0.85rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .item-card:hover .btn-delete,
+    .item-card .btn-delete { opacity: 1; }
+
+    .empty-state {
+      text-align: center;
+      padding: 48px 20px;
+      color: var(--ink-dim);
+      font-size: 0.9rem;
+      grid-column: 1 / -1;
+    }
+    .empty-state .empty-icon { font-size: 3rem; margin-bottom: 12px; }
+    .empty-state p { line-height: 1.5; }
+
+    /* ═══════════════════════════════════════════════
+       BOTTOM NAVIGATION
+       ═══════════════════════════════════════════════ */
+
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      align-items: center;
+      justify-content: space-around;
+      height: calc(68px + var(--safe-bottom));
+      padding-bottom: var(--safe-bottom);
+      background: var(--glass);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-top: 1px solid var(--border);
+      z-index: 100;
+    }
+    .nav-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      padding: 8px 16px;
+      transition: color 0.2s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .nav-item .nav-icon { font-size: 1.4rem; line-height: 1; }
+    .nav-item .nav-label {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 500;
+    }
+    .nav-item { color: var(--ink-faint); }
+    .nav-item.active { color: var(--ember); }
+    .nav-item.active .nav-dot {
+      width: 4px; height: 4px;
+      background: var(--ember);
+      border-radius: 50%;
+      position: absolute;
+      bottom: -2px;
+    }
+
+    /* Camera nav button - special style */
+    .nav-item.camera-nav {
+      position: relative;
+      top: -8px;
+    }
+    .nav-item.camera-nav .nav-icon-wrap {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: var(--ember);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 20px var(--ember-glow);
+      transition: transform 0.15s;
+    }
+    .nav-item.camera-nav:active .nav-icon-wrap { transform: scale(0.9); }
+    .nav-item.camera-nav .nav-icon { color: #0a0a0a; font-size: 1.5rem; }
+    .nav-item.camera-nav .nav-label { color: var(--ember); }
+
+    /* ── Toast Notification ── */
+    .toast {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-100px);
+      max-width: 360px;
+      width: calc(100% - 40px);
+      padding: 14px 18px;
+      border-radius: var(--radius-sm);
+      font-size: 0.85rem;
+      font-weight: 500;
+      text-align: center;
+      z-index: 200;
+      transition: transform 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+    .toast.visible { transform: translateX(-50%) translateY(0); }
+    .toast.success {
+      background: rgba(111,174,127,0.2);
+      border: 1px solid rgba(111,174,127,0.35);
+      color: var(--ok);
+    }
+    .toast.error {
+      background: rgba(232,93,93,0.2);
+      border: 1px solid rgba(232,93,93,0.35);
+      color: var(--danger);
+    }
+
+    /* ── Scanning Overlay Text ── */
+    .scan-status-text {
+      font-size: 0.85rem;
+      color: var(--ember);
+      text-align: center;
+      margin-top: 12px;
+      display: none;
+    }
+    .scan-ring.scanning ~ .scan-status-text { display: block; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- ═══ Toast ═══ -->
+    <div class="toast" id="toast"></div>
+
+    <!-- ═══════════════════════════════════════════
+         VIEW: CAMERA (Scan & Add)
+         ═══════════════════════════════════════════ -->
+    <div class="view active" id="view-camera">
+      <div class="header">
+        <span class="header-title">Scan Clothing</span>
+      </div>
+      <div class="camera-view">
+        <!-- Scan Hero -->
+        <div class="scan-hero" id="scan-hero">
+          <div class="scan-ring" id="scan-ring" onclick="triggerScan()">
+            <div class="ring-inner">
+              <span class="ring-icon">📷</span>
+              <span class="ring-label">Scan</span>
+              <div class="ring-spinner"></div>
+            </div>
+          </div>
+          <p class="scan-subtitle">
+            Take a photo of your clothing item.<br>
+            AI will auto-detect the category & color.
+          </p>
+          <p class="scan-status-text" id="scan-status">Analyzing with AI...</p>
+        </div>
+        <input type="file" accept="image/*" capture="environment" id="scan-input" class="scan-file-input" />
+
+        <!-- Detection Result Card -->
+        <div class="detect-card" id="detect-card">
+          <img class="detect-preview" id="detect-preview" src="" alt="Preview" />
+          <div class="detect-body">
+            <div class="detect-ai-tag">✨ AI Detected</div>
+            <div class="detect-fields">
+              <div class="detect-field">
+                <label>Name</label>
+                <input type="text" id="det-name" placeholder="e.g. Blue Denim Jacket" />
+              </div>
+              <div class="detect-field">
+                <label>Category</label>
+                <select id="det-category">
+                  <option value="top">Top</option>
+                  <option value="bottom">Bottom</option>
+                  <option value="footwear">Footwear</option>
+                  <option value="outerwear">Outerwear</option>
+                  <option value="accessory">Accessory</option>
+                </select>
+              </div>
+              <div class="detect-field">
+                <label>Color</label>
+                <input type="text" id="det-color" placeholder="e.g. Navy blue" />
+              </div>
+              <div class="detect-field">
+                <label>Best For Weather</label>
+                <select id="det-weather">
+                  <option value="any">Any Weather</option>
+                  <option value="hot">Hot (30°+)</option>
+                  <option value="warm">Warm (24°–30°)</option>
+                  <option value="cool">Cool (15°–24°)</option>
+                  <option value="cold">Cold (below 15°)</option>
+                  <option value="rain">Rainy Days</option>
+                </select>
+              </div>
+            </div>
+            <div class="detect-actions">
+              <button class="btn-cancel" onclick="cancelDetection()">Cancel</button>
+              <button class="btn-confirm" id="btn-confirm" onclick="confirmAdd()">Add to Wardrobe</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════
+         VIEW: CLOSET (Your Items)
+         ═══════════════════════════════════════════ -->
+    <div class="view" id="view-closet">
+      <div class="header">
+        <span class="header-title">My Closet</span>
+        <span class="header-count" id="item-count">0 items</span>
+      </div>
+      <div class="closet-view">
+        <div class="tabs" id="category-tabs">
+          <span class="tab active" data-cat="all">All</span>
+          <span class="tab" data-cat="top">👕 Tops</span>
+          <span class="tab" data-cat="bottom">👖 Bottoms</span>
+          <span class="tab" data-cat="footwear">👟 Footwear</span>
+          <span class="tab" data-cat="outerwear">🧥 Outerwear</span>
+          <span class="tab" data-cat="accessory">💍 Accessories</span>
+        </div>
+        <div class="items-grid" id="items-grid"></div>
+      </div>
+    </div>
+
+    <!-- ═══ Bottom Navigation ═══ -->
+    <nav class="bottom-nav">
+      <div class="nav-item" data-view="view-closet" onclick="switchView('view-closet')">
+        <span class="nav-icon">👔</span>
+        <span class="nav-label">Closet</span>
+      </div>
+      <div class="nav-item camera-nav active" data-view="view-camera" onclick="switchView('view-camera')">
+        <div class="nav-icon-wrap">
+          <span class="nav-icon">📷</span>
+        </div>
+        <span class="nav-label">Scan</span>
+      </div>
+      <div class="nav-item" onclick="goMirror()">
+        <span class="nav-icon">🪞</span>
+        <span class="nav-label">Mirror</span>
+      </div>
+    </nav>
+  </div>
+
+  <script>
+    /* ── State ── */
+    let allItems = [];
+    let activeFilter = 'all';
+    let pendingFile = null;
+
+    const CATEGORY_EMOJI = {
+      top: '👕', bottom: '👖', footwear: '👟', outerwear: '🧥', accessory: '💍'
+    };
+
+    const COLOR_MAP = {
+      'white': '#ffffff', 'black': '#222222', 'blue': '#3b82f6',
+      'navy': '#1e3a5f', 'navy blue': '#1e3a5f', 'red': '#ef4444',
+      'green': '#22c55e', 'yellow': '#eab308', 'grey': '#9ca3af',
+      'gray': '#9ca3af', 'beige': '#d4c5a9', 'brown': '#92400e',
+      'pink': '#ec4899', 'purple': '#a855f7', 'orange': '#f97316',
+      'cream': '#f5f0e1', 'maroon': '#7f1d1d', 'olive': '#6b7a3e',
+    };
+
+    /* ── Navigation ── */
+    function switchView(viewId) {
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.getElementById(viewId).classList.add('active');
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      document.querySelector(`.nav-item[data-view="${viewId}"]`)?.classList.add('active');
+
+      if (viewId === 'view-closet') loadItems();
+    }
+
+    function goMirror() {
+      window.location.href = '/';
+    }
+
+    /* ── Toast ── */
+    function showToast(text, type = 'success') {
+      const el = document.getElementById('toast');
+      el.textContent = text;
+      el.className = 'toast ' + type;
+      requestAnimationFrame(() => el.classList.add('visible'));
+      setTimeout(() => el.classList.remove('visible'), 2800);
+    }
+
+    /* ── Camera / Scan ── */
+    function triggerScan() {
+      document.getElementById('scan-input').click();
+    }
+
+    document.getElementById('scan-input').addEventListener('change', async function() {
+      if (!this.files.length) return;
+
+      const file = this.files[0];
+      pendingFile = file;
+
+      const ring = document.getElementById('scan-ring');
+      const hero = document.getElementById('scan-hero');
+      const card = document.getElementById('detect-card');
+
+      // Show scanning animation
+      ring.classList.add('scanning');
+
+      // Show preview
+      const previewUrl = URL.createObjectURL(file);
+      document.getElementById('detect-preview').src = previewUrl;
+
+      // AI classify
+      const formData = new FormData();
+      formData.append('image', file);
+
+      try {
+        const res = await fetch('/api/wardrobe/classify', {
+          method: 'POST',
+          body: formData,
+        });
+        const data = await res.json();
+
+        ring.classList.remove('scanning');
+
+        if (data.status === 'ok' && data.prediction) {
+          const pred = data.prediction;
+          document.getElementById('det-name').value = pred.suggested_name || `${pred.color || ''} ${pred.sub_category || pred.category || 'Item'}`.trim();
+          document.getElementById('det-category').value = pred.category || 'top';
+          document.getElementById('det-color').value = pred.color || '';
+        }
+
+        // Show detection card, hide hero
+        hero.style.display = 'none';
+        card.classList.add('visible');
+
+      } catch (err) {
+        console.error('AI classification error:', err);
+        ring.classList.remove('scanning');
+
+        // Still show card for manual entry
+        document.getElementById('det-name').value = '';
+        document.getElementById('det-category').value = 'top';
+        document.getElementById('det-color').value = '';
+
+        hero.style.display = 'none';
+        card.classList.add('visible');
+      }
+
+      // Reset input so same file can be re-selected
+      this.value = '';
+    });
+
+    function cancelDetection() {
+      pendingFile = null;
+      document.getElementById('detect-card').classList.remove('visible');
+      document.getElementById('scan-hero').style.display = '';
+      // Reset fields
+      document.getElementById('det-name').value = '';
+      document.getElementById('det-color').value = '';
+    }
+
+    async function confirmAdd() {
+      const btn = document.getElementById('btn-confirm');
+      btn.disabled = true;
+      btn.textContent = 'Adding...';
+
+      const formData = new FormData();
+      formData.append('name', document.getElementById('det-name').value.trim());
+      formData.append('category', document.getElementById('det-category').value);
+      formData.append('color', document.getElementById('det-color').value.trim());
+      formData.append('weather', document.getElementById('det-weather').value);
+      if (pendingFile) formData.append('image', pendingFile);
+
+      try {
+        const res = await fetch('/api/wardrobe', { method: 'POST', body: formData });
+        const data = await res.json();
+
+        if (data.status === 'ok') {
+          showToast('✅ Added to your wardrobe!', 'success');
+          cancelDetection();
+          loadItems();
+        } else {
+          showToast(data.error || 'Failed to add item', 'error');
+        }
+      } catch (e) {
+        showToast('Network error — try again', 'error');
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Add to Wardrobe';
+    }
+
+    /* ── Closet / Items ── */
+    document.getElementById('category-tabs').addEventListener('click', function(e) {
+      if (e.target.classList.contains('tab')) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        e.target.classList.add('active');
+        activeFilter = e.target.dataset.cat;
+        renderItems();
+      }
+    });
+
+    async function loadItems() {
+      try {
+        const res = await fetch('/api/wardrobe');
+        const data = await res.json();
+        allItems = data.items || [];
+        document.getElementById('item-count').textContent = allItems.length + ' item' + (allItems.length !== 1 ? 's' : '');
+        renderItems();
+      } catch (e) {
+        console.error('Failed to load wardrobe:', e);
+      }
+    }
+
+    function getColorHex(colorName) {
+      if (!colorName) return null;
+      const key = colorName.toLowerCase().trim();
+      return COLOR_MAP[key] || null;
+    }
+
+    function renderItems() {
+      const grid = document.getElementById('items-grid');
+      let filtered = allItems;
+      if (activeFilter !== 'all') {
+        filtered = allItems.filter(i => i.category === activeFilter);
+      }
+
+      if (!filtered.length) {
+        const msg = activeFilter === 'all'
+          ? 'No items yet. Tap the camera button below to scan your first piece!'
+          : `No ${activeFilter} items yet.`;
+        grid.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">${CATEGORY_EMOJI[activeFilter] || '👔'}</div>
+            <p>${msg}</p>
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = filtered.map(item => {
+        const imgHtml = item.image_filename
+          ? `<img src="/wardrobe-images/${item.user_id}/${item.image_filename}" alt="${item.name}" loading="lazy" />`
+          : `<div class="no-img">${CATEGORY_EMOJI[item.category] || '👔'}</div>`;
+
+        const colorDot = item.color
+          ? `<span class="item-color-dot" style="background:${getColorHex(item.color) || 'var(--ink-dim)'}"></span>`
+          : '';
+
+        return `
+          <div class="item-card">
+            ${imgHtml}
+            <div class="item-info">
+              <div class="item-name">${item.name}</div>
+              <div class="item-meta">${colorDot} ${item.category}${item.color ? ' · ' + item.color : ''}</div>
+            </div>
+            <button class="btn-delete" onclick="deleteItem(${item.id})" title="Remove">×</button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function deleteItem(id) {
+      if (!confirm('Remove this item from your wardrobe?')) return;
+      try {
+        await fetch(`/api/wardrobe/${id}`, { method: 'DELETE' });
+        showToast('Item removed', 'success');
+        loadItems();
+      } catch (e) {
+        showToast('Failed to remove item', 'error');
+      }
+    }
+
+    /* ── Init ── */
+    loadItems();
+  </script>
+</body>
+</html>

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ReflectAI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+  <main class="mirror">
+
+    <!-- Top: clock + greeting + user + outfit recommendation -->
+    <section class="region top">
+      <div class="time" id="time">--:--</div>
+      <div class="date" id="date">Loading date…</div>
+      <div class="greeting" id="greeting">Good day.</div>
+      <div class="user-row">
+        <div class="user-name" id="user-name">—</div>
+        <div class="grooming-pill" id="grooming-pill" style="display: none;">✨ Well-Groomed</div>
+      </div>
+
+      <!-- Outfit Recommendation widget -->
+      <div class="outfit-slot" id="outfit-slot">
+        <div class="outfit-header">
+          <span class="region-label">Today's Outfit</span>
+          <span class="stylist-live-pill" id="stylist-live-pill" style="display: none;">👁️ Camera Active</span>
+        </div>
+        <div class="outfit-items" id="outfit-items">
+          <div class="calendar-loading">Loading outfit…</div>
+        </div>
+        <div class="outfit-reason" id="outfit-reason"></div>
+      </div>
+    </section>
+
+    <!-- Top-center: Voice Assistant Overlay -->
+    <section class="region top-center" id="voice-overlay" style="display: none;">
+      <div class="voice-indicator">
+        <span class="voice-dot" id="voice-dot"></span>
+        <span id="voice-state-text">Listening...</span>
+      </div>
+      <div class="voice-transcript" id="voice-transcript"></div>
+      <div class="voice-reply" id="voice-reply"></div>
+    </section>
+
+    <!-- Bottom-left: system status (Phase 2 scope) -->
+    <section class="region bottom-left">
+      <div class="region-label">System status</div>
+      <div class="status-row">
+        <span class="status-dot" id="esp32-dot"></span>
+        <span id="esp32-status">ESP32: —</span>
+      </div>
+      <div class="status-row">
+        <span class="status-dot" id="camera-dot"></span>
+        <span id="camera-status">Camera: —</span>
+      </div>
+    </section>
+
+    <!-- Bottom-right: privacy indicator (always visible, per spec priority) -->
+    <section class="region bottom-right" id="privacy-banner" style="display: none;">
+      <div class="privacy-title">Privacy mode</div>
+      <div class="privacy-subtitle">Camera and AI processing paused.</div>
+    </section>
+
+    <!-- Top-right: Weather widget -->
+    <section class="region weather-slot" id="weather-slot">
+      <div class="weather-main">
+        <span class="weather-temp" id="weather-temp">--°</span>
+        <span class="weather-icon" id="weather-icon">--</span>
+      </div>
+      <div class="weather-condition" id="weather-condition">Loading weather…</div>
+      <div class="weather-details" id="weather-details">
+        <span id="weather-range">H: --° L: --°</span>
+        <span class="weather-bullet">·</span>
+        <span id="weather-city">Location</span>
+      </div>
+    </section>
+
+    <!-- Center-right: Calendar widget -->
+    <section class="region calendar-slot" id="calendar-slot">
+      <div class="region-label">Today's Schedule</div>
+      <div class="calendar-events" id="calendar-events">
+        <div class="calendar-loading">Loading schedule…</div>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="/assets/script.js"></script>
+</body>
+</html>

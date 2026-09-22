@@ -1,0 +1,59 @@
+{
+  "maanik": {
+    "id": "maanik",
+    "name": "MAANIK",
+    "greeting_name": "MAANIK",
+    "outfit": [
+      "Black T-Shirt",
+      "Blue Jeans",
+      "White Sneakers"
+    ],
+    "hair": "Textured Crop",
+    "calendar": [
+      "10:30 AM \u00b7 Project Review",
+      "04:00 PM \u00b7 Gym & Workout"
+    ],
+    "news": [
+      "Tech updates & innovations",
+      "Local weather outlook"
+    ]
+  },
+  "krishna": {
+    "id": "krishna",
+    "name": "KRISHNA",
+    "greeting_name": "KRISHNA",
+    "outfit": [
+      "Black T-Shirt",
+      "Blue Jeans",
+      "White Sneakers"
+    ],
+    "hair": "Textured Crop",
+    "calendar": [
+      "10:30 AM \u00b7 Project Review",
+      "04:00 PM \u00b7 Gym & Workout"
+    ],
+    "news": [
+      "Tech updates & innovations",
+      "Local weather outlook"
+    ]
+  },
+  "ayush": {
+    "id": "ayush",
+    "name": "AYUSH",
+    "greeting_name": "AYUSH",
+    "outfit": [
+      "Black T-Shirt",
+      "Blue Jeans",
+      "White Sneakers"
+    ],
+    "hair": "Textured Crop",
+    "calendar": [
+      "10:30 AM \u00b7 Project Review",
+      "04:00 PM \u00b7 Gym & Workout"
+    ],
+    "news": [
+      "Tech updates & innovations",
+      "Local weather outlook"
+    ]
+  }
+}

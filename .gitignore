@@ -1,0 +1,14 @@
+.env
+__pycache__/
+*.pyc
+data/reflectai.db
+data/faces/*/
+logs/*.log
+.venv/
+venv/
+*.egg-info/
+
+voice_engine/*.gguf
+voice_engine/*.onnx
+*.gguf
+*.onnx

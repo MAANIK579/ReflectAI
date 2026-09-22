@@ -1,0 +1,28 @@
+{
+  "commands": [
+    {
+      "phrases": ["what time is it", "what's the time", "tell me the time"],
+      "reply": "time"
+    },
+    {
+      "phrases": ["what's the weather", "how's the weather", "what is the weather like","maanik"],
+      "reply": "weather"
+    },
+    {
+      "phrases": ["what's today's date", "what day is it", "what's the date"],
+      "reply": "date"
+    },
+    {
+      "phrases": ["hello", "hi there", "hey"],
+      "reply": "Hello! How can I help?"
+    },
+    {
+      "phrases": ["thank you", "thanks"],
+      "reply": "You're welcome."
+    },
+    {
+      "phrases": ["good night", "goodnight"],
+      "reply": "Good night, sleep well."
+    }
+  ]
+}

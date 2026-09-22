@@ -1,0 +1,7 @@
+vosk
+sounddevice
+openwakeword
+onnxruntime
+numpy
+requests
+llama-cpp-python
