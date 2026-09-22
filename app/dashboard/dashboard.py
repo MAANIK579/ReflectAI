@@ -7,6 +7,7 @@ voice assistant, wardrobe management, and outfit recommendations.
 
 import logging
 import os
+import time
 import uuid
 
 from flask import Flask, jsonify, render_template, request, send_from_directory
@@ -25,6 +26,20 @@ WARDROBE_IMAGE_DIR = settings.DATA_DIR / "wardrobe"
 
 _live_stylist_state = {}
 _live_grooming_state = {}
+
+_esp32_state = {
+    "device": "esp32",
+    "status": "offline",
+    "temperature": None,
+    "humidity": None,
+    "light": None,
+    "motion": False,
+    "last_seen": None,
+}
+
+_last_esp32_user = None
+_last_esp32_privacy = None
+_last_camera_seen = None
 
 app = Flask(
     __name__,
@@ -70,12 +85,15 @@ def set_active_user():
     their name immediately — richer profile data (outfit/hair/calendar
     preferences) gets wired in properly during Phases 6-8.
     """
+    global _last_camera_seen
     data = request.get_json(force=True, silent=True) or {}
     user_id = data.get("userId")
     name = data.get("name")
 
     if not user_id:
         return jsonify({"error": "userId is required"}), 400
+
+    _last_camera_seen = time.time()
 
     if UserRepository.get(user_id) is None:
         UserRepository.create_or_update(user_id, name or user_id.replace("_", " ").title())
@@ -87,15 +105,93 @@ def set_active_user():
     return jsonify({"status": "ok", "active_user": user_id})
 
 
+@app.route("/api/esp32/state", methods=["POST"])
+def esp32_state():
+    """
+    Receives JSON telemetry and physical button interactions from ESP32:
+    - User selection button (User 1, User 2, Guest)
+    - Privacy mode toggle
+    - Sensors: DHT22 (temp, humidity), LDR (light), PIR (motion)
+    """
+    global _last_esp32_user, _last_esp32_privacy
+    data = request.get_json(force=True, silent=True) or {}
+
+    # 1. Update active user ONLY when an ESP32 physical button is actually pressed
+    # (i.e. on state transition, not on every background periodic sensor packet)
+    raw_user = data.get("user")
+    if raw_user:
+        if _last_esp32_user is None:
+            _last_esp32_user = raw_user
+        elif raw_user != _last_esp32_user:
+            _last_esp32_user = raw_user
+            # map "User 1" -> "user1", "User 2" -> "user2", "Guest" -> "guest"
+            user_id = raw_user.strip().lower().replace(" ", "")
+            if UserRepository.get(user_id) is not None:
+                SettingsRepository.set("active_user", user_id)
+                logger.info(f"ESP32 physical button switched active user to: {user_id}")
+
+    # 2. Update privacy mode ONLY when the privacy button state changes on ESP32
+    if "privacy" in data:
+        raw_privacy = bool(data.get("privacy"))
+        if _last_esp32_privacy is None:
+            _last_esp32_privacy = raw_privacy
+        elif raw_privacy != _last_esp32_privacy:
+            _last_esp32_privacy = raw_privacy
+            privacy_val = "true" if raw_privacy else "false"
+            SettingsRepository.set("privacy_mode", privacy_val)
+            logger.info(f"ESP32 physical button changed privacy mode to: {privacy_val}")
+
+    # 3. Save telemetry data
+    _esp32_state["device"] = data.get("device", "esp32")
+    _esp32_state["status"] = data.get("status", "online")
+    _esp32_state["temperature"] = data.get("temperature")
+    _esp32_state["humidity"] = data.get("humidity")
+    _esp32_state["light"] = data.get("light")
+    _esp32_state["motion"] = bool(data.get("motion", False))
+    _esp32_state["last_seen"] = time.time()
+
+    current_active = SettingsRepository.get("active_user", default="guest")
+    return jsonify({
+        "status": "ok",
+        "active_user": current_active,
+        "message": "ESP32 state updated",
+        "data": _esp32_state
+    })
+
+
 @app.route("/api/status")
 def status():
-    # active_user is set by the face engine's POST to /api/user/active
-    # (see face_engine/face_service.py). Defaults to "user1" if nothing
-    # has set it yet (e.g. face engine not running).
+    # active_user is set by face engine or physical ESP32 buttons.
     active_user_id = SettingsRepository.get("active_user", default="user1")
     user = UserRepository.get(active_user_id) or {"name": "Guest"}
 
     privacy_mode = SettingsRepository.get("privacy_mode", default="false") == "true"
+
+    now = time.time()
+    esp32_online = (
+        _esp32_state["last_seen"] is not None and
+        (now - _esp32_state["last_seen"]) < 15
+    )
+    if esp32_online:
+        esp32_status_str = "online"
+    elif settings.ESP32_MOCK_MODE:
+        esp32_status_str = "mock mode"
+    else:
+        esp32_status_str = "disconnected"
+
+    camera_online = (
+        _last_camera_seen is not None and
+        (now - _last_camera_seen) < 25
+    )
+    if camera_online:
+        camera_status_str = "online"
+        camera_mock = False
+    elif settings.CAMERA_MOCK_MODE:
+        camera_status_str = "mock mode"
+        camera_mock = True
+    else:
+        camera_status_str = "disconnected"
+        camera_mock = False
 
     return jsonify({
         "user": {
@@ -106,14 +202,12 @@ def status():
         "voice": _voice_state,
         "stylist": _live_stylist_state.get(active_user_id),
         "grooming": _live_grooming_state.get(active_user_id),
+        "sensors": _esp32_state,
         "system": {
             "esp32_mock_mode": settings.ESP32_MOCK_MODE,
-            "camera_mock_mode": settings.CAMERA_MOCK_MODE,
-            # Real connection status arrives in Phase 3 (ESP32) and
-            # Phase 4 (camera) — reported as "not yet connected" until
-            # those phases exist, rather than faking a status.
-            "esp32_status": "not yet connected" if not settings.ESP32_MOCK_MODE else "mock mode",
-            "camera_status": "not yet connected" if not settings.CAMERA_MOCK_MODE else "mock mode",
+            "camera_mock_mode": camera_mock,
+            "esp32_status": esp32_status_str,
+            "camera_status": camera_status_str,
         },
     })
 

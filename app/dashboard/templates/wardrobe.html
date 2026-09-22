@@ -211,6 +211,46 @@
       border-radius: 20px;
       margin-bottom: 12px;
     }
+    .detect-chips-label {
+      font-size: 0.72rem;
+      color: var(--ink-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+    .detect-chips {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 5px;
+      margin-bottom: 14px;
+    }
+    .chip-btn {
+      padding: 8px 2px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xs);
+      color: var(--ink);
+      font-size: 0.72rem;
+      font-weight: 500;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s ease;
+      font-family: 'Inter', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+    }
+    .chip-btn .chip-emoji { font-size: 1.25rem; line-height: 1; }
+    .chip-btn.active {
+      background: var(--ember);
+      color: #0a0a0a;
+      border-color: var(--ember);
+      font-weight: 600;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 14px var(--ember-glow);
+    }
     .detect-fields {
       display: flex;
       flex-direction: column;
@@ -557,6 +597,31 @@
           <img class="detect-preview" id="detect-preview" src="" alt="Preview" />
           <div class="detect-body">
             <div class="detect-ai-tag">✨ AI Detected</div>
+
+            <div class="detect-chips-label">Garment Type (1-Tap Override)</div>
+            <div class="detect-chips" id="detect-chips">
+              <button type="button" class="chip-btn active" data-cat="top" data-sub="T-Shirt" onclick="selectChipGarment('top', 'T-Shirt')">
+                <span class="chip-emoji">👕</span>
+                <span>T-Shirt</span>
+              </button>
+              <button type="button" class="chip-btn" data-cat="top" data-sub="Shirt" onclick="selectChipGarment('top', 'Shirt')">
+                <span class="chip-emoji">👔</span>
+                <span>Shirt</span>
+              </button>
+              <button type="button" class="chip-btn" data-cat="bottom" data-sub="Pants" onclick="selectChipGarment('bottom', 'Pants')">
+                <span class="chip-emoji">👖</span>
+                <span>Bottom</span>
+              </button>
+              <button type="button" class="chip-btn" data-cat="outerwear" data-sub="Jacket" onclick="selectChipGarment('outerwear', 'Jacket')">
+                <span class="chip-emoji">🧥</span>
+                <span>Jacket</span>
+              </button>
+              <button type="button" class="chip-btn" data-cat="footwear" data-sub="Shoes" onclick="selectChipGarment('footwear', 'Shoes')">
+                <span class="chip-emoji">👟</span>
+                <span>Shoes</span>
+              </button>
+            </div>
+
             <div class="detect-fields">
               <div class="detect-field">
                 <label>Name</label>
@@ -719,6 +784,9 @@
           document.getElementById('det-name').value = pred.suggested_name || `${pred.color || ''} ${pred.sub_category || pred.category || 'Item'}`.trim();
           document.getElementById('det-category').value = pred.category || 'top';
           document.getElementById('det-color').value = pred.color || '';
+          highlightGarmentChip(pred.category || 'top', pred.sub_category || '');
+        } else {
+          highlightGarmentChip('top', 'T-Shirt');
         }
 
         // Show detection card, hide hero
@@ -733,6 +801,7 @@
         document.getElementById('det-name').value = '';
         document.getElementById('det-category').value = 'top';
         document.getElementById('det-color').value = '';
+        highlightGarmentChip('top', 'T-Shirt');
 
         hero.style.display = 'none';
         card.classList.add('visible');
@@ -740,6 +809,41 @@
 
       // Reset input so same file can be re-selected
       this.value = '';
+    });
+
+    function highlightGarmentChip(cat, sub) {
+      let matched = false;
+      document.querySelectorAll('.chip-btn').forEach(btn => {
+        const catMatch = btn.dataset.cat === cat;
+        const subMatch = !sub || (btn.dataset.sub && sub.toLowerCase().includes(btn.dataset.sub.toLowerCase()));
+        if (catMatch && subMatch && !matched) {
+          btn.classList.add('active');
+          matched = true;
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+      if (!matched) {
+        const fallbackBtn = document.querySelector(`.chip-btn[data-cat="${cat}"]`);
+        if (fallbackBtn) fallbackBtn.classList.add('active');
+      }
+    }
+
+    function selectChipGarment(cat, sub) {
+      document.getElementById('det-category').value = cat;
+      highlightGarmentChip(cat, sub);
+
+      // Intelligently adapt suggested name
+      const colorInput = document.getElementById('det-color');
+      const nameInput = document.getElementById('det-name');
+      const color = colorInput.value.trim();
+      const label = sub || (cat === 'top' ? 'Shirt' : 'Pants');
+      nameInput.value = color ? `${color} ${label}` : label;
+    }
+
+    // Sync dropdown changes with chips
+    document.getElementById('det-category').addEventListener('change', function() {
+      highlightGarmentChip(this.value, '');
     });
 
     function cancelDetection() {

@@ -28,16 +28,25 @@ PROFILES_FILE = os.path.join(DATA_DIR, 'profiles.json')
 YUNET_MODEL = os.path.join(MODELS_DIR, 'face_detection_yunet_2023mar.onnx')
 SFACE_MODEL = os.path.join(MODELS_DIR, 'face_recognition_sface_2021dec.onnx')
 
-API_URL = 'http://localhost:5000/api/user/active'
-CLOTHING_API_URL = 'http://localhost:5000/api/mirror/clothing/live'
+DASHBOARD_HOST = os.getenv('DASHBOARD_HOST', 'localhost:5000')
+API_URL = f'http://{DASHBOARD_HOST}/api/user/active'
+CLOTHING_API_URL = f'http://{DASHBOARD_HOST}/api/mirror/clothing/live'
 
 # ── Configuration ──────────────────────────────────────────────
-CAMERA_INDEX = 0            # Webcam device index
+CAMERA_INDEX = int(os.getenv('CAMERA_INDEX', '0')) # Webcam device index
 DETECTION_FPS = 4           # Target frames per second for face checking
 COSINE_THRESHOLD = 0.363    # SFace cosine similarity threshold (higher = stricter)
 CONFIRM_FRAMES = 3          # Consecutive frames needed to confirm identity switch
 NO_FACE_TIMEOUT = 15        # Seconds with no face before reverting to guest
-SHOW_PREVIEW = True         # Show live OpenCV preview window (set False for headless Pi)
+
+# Auto-detect headless mode (e.g. over SSH without an X11 screen)
+SHOW_PREVIEW_ENV = os.getenv('SHOW_PREVIEW', '').lower()
+if SHOW_PREVIEW_ENV in ('0', 'false', 'no'):
+    SHOW_PREVIEW = False
+elif SHOW_PREVIEW_ENV in ('1', 'true', 'yes'):
+    SHOW_PREVIEW = True
+else:
+    SHOW_PREVIEW = ('DISPLAY' in os.environ) if os.name != 'nt' else True
 
 FALLBACK_USER_ID = 'guest'  # matches ReflectAI's seeded default users
 
@@ -216,15 +225,53 @@ def main():
     # Open camera
     print(f'\nOpening camera (index {CAMERA_INDEX})...')
     cap = cv2.VideoCapture(CAMERA_INDEX)
-    if not cap.isOpened():
-        print('[ERROR] Cannot open camera. Check connection and index.')
-        return
+    is_opened = cap.isOpened()
+    frame = None
+    if is_opened:
+        ret, frame = cap.read()
+        if not ret or frame is None:
+            is_opened = False
+            cap.release()
 
-    ret, frame = cap.read()
-    if not ret or frame is None:
-        print('[ERROR] Cannot read frame from camera.')
-        cap.release()
-        return
+    if not is_opened:
+        # Fallback to native Raspberry Pi Picamera2
+        try:
+            from picamera2 import Picamera2
+            print('[INFO] Attempting to connect via Raspberry Pi Picamera2...')
+            class PiCameraStream:
+                def __init__(self, width=640, height=480):
+                    self.picam2 = Picamera2()
+                    config = self.picam2.create_preview_configuration(main={"size": (width, height), "format": "RGB888"})
+                    self.picam2.configure(config)
+                    self.picam2.start()
+                    time.sleep(1)
+
+                def read(self):
+                    f = self.picam2.capture_array()
+                    if f is not None:
+                        return True, cv2.cvtColor(f, cv2.COLOR_RGB2BGR)
+                    return False, None
+
+                def isOpened(self):
+                    return True
+
+                def release(self):
+                    try:
+                        self.picam2.stop()
+                        self.picam2.close()
+                    except Exception:
+                        pass
+
+            cap = PiCameraStream(640, 480)
+            ret, frame = cap.read()
+            if not ret or frame is None:
+                print('[ERROR] Could not read frame from Picamera2.')
+                cap.release()
+                return
+            print('[INFO] Successfully connected to Raspberry Pi Camera via Picamera2!')
+        except Exception as e:
+            print(f'[ERROR] Cannot open camera with OpenCV or Picamera2: {e}')
+            return
 
     h, w = frame.shape[:2]
     print(f'Camera resolution: {w}x{h}')

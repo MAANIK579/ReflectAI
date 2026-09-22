@@ -56,6 +56,11 @@
         <span class="status-dot" id="camera-dot"></span>
         <span id="camera-status">Camera: —</span>
       </div>
+      <div class="sensor-readings" id="sensor-readings" style="display: none;">
+        <span id="sensor-temp-hum">--</span>
+        <span class="weather-bullet">·</span>
+        <span id="sensor-light-motion">--</span>
+      </div>
     </section>
 
     <!-- Bottom-right: privacy indicator (always visible, per spec priority) -->
@@ -75,6 +80,12 @@
         <span id="weather-range">H: --° L: --°</span>
         <span class="weather-bullet">·</span>
         <span id="weather-city">Location</span>
+      </div>
+      <div class="indoor-climate" id="indoor-climate" style="display: none;">
+        <span class="indoor-label">Room</span>
+        <span class="indoor-temp" id="indoor-temp">--°C</span>
+        <span class="weather-bullet">·</span>
+        <span class="indoor-hum" id="indoor-hum">--% Hum</span>
       </div>
     </section>
 

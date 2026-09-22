@@ -55,5 +55,24 @@
       "Tech updates & innovations",
       "Local weather outlook"
     ]
+  },
+  "daksh": {
+    "id": "daksh",
+    "name": "DAKSH",
+    "greeting_name": "DAKSH",
+    "outfit": [
+      "Black T-Shirt",
+      "Blue Jeans",
+      "White Sneakers"
+    ],
+    "hair": "Textured Crop",
+    "calendar": [
+      "10:30 AM \u00b7 Project Review",
+      "04:00 PM \u00b7 Gym & Workout"
+    ],
+    "news": [
+      "Tech updates & innovations",
+      "Local weather outlook"
+    ]
   }
 }

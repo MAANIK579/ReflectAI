@@ -181,14 +181,52 @@ async function updateStatus() {
       }
     }
 
-    esp32StatusEl.textContent = `ESP32: ${data.system.esp32_status}`;
+    // ESP32 telemetry: live room temperature, humidity, light, motion
+    const indoorClimateEl = document.getElementById('indoor-climate');
+    const indoorTempEl = document.getElementById('indoor-temp');
+    const indoorHumEl = document.getElementById('indoor-hum');
+    const sensorReadingsEl = document.getElementById('sensor-readings');
+    const sensorTempHumEl = document.getElementById('sensor-temp-hum');
+    const sensorLightMotionEl = document.getElementById('sensor-light-motion');
+
+    if (data.sensors && data.sensors.temperature !== null && data.sensors.temperature !== undefined) {
+      const tempVal = Number(data.sensors.temperature).toFixed(1);
+      const humVal = (data.sensors.humidity !== null && data.sensors.humidity !== undefined)
+        ? Math.round(Number(data.sensors.humidity))
+        : null;
+
+      if (indoorClimateEl && indoorTempEl) {
+        indoorClimateEl.style.display = 'flex';
+        indoorTempEl.textContent = `${tempVal}°C`;
+        if (indoorHumEl && humVal !== null) {
+          indoorHumEl.textContent = `${humVal}% Hum`;
+        }
+      }
+
+      if (sensorReadingsEl && sensorTempHumEl) {
+        sensorReadingsEl.style.display = 'flex';
+        sensorTempHumEl.textContent = humVal !== null ? `${tempVal}°C · ${humVal}% Hum` : `${tempVal}°C`;
+        if (sensorLightMotionEl) {
+          const lightStr = data.sensors.light ? data.sensors.light.toUpperCase() : 'LIGHT';
+          const motionStr = data.sensors.motion ? 'MOTION' : 'STILL';
+          sensorLightMotionEl.textContent = `${lightStr} · ${motionStr}`;
+        }
+      }
+
+      esp32StatusEl.textContent = `ESP32: ${data.system.esp32_status} (${tempVal}°C)`;
+    } else {
+      if (indoorClimateEl) indoorClimateEl.style.display = 'none';
+      if (sensorReadingsEl) sensorReadingsEl.style.display = 'none';
+      esp32StatusEl.textContent = `ESP32: ${data.system.esp32_status}`;
+    }
+
     esp32DotEl.className = 'status-dot ' + (
-      data.system.esp32_mock_mode ? 'mock' : 'connected'
+      data.system.esp32_status === 'online' ? 'connected' : (data.system.esp32_mock_mode ? 'mock' : '')
     );
 
     cameraStatusEl.textContent = `Camera: ${data.system.camera_status}`;
     cameraDotEl.className = 'status-dot ' + (
-      data.system.camera_mock_mode ? 'mock' : 'connected'
+      data.system.camera_status === 'online' ? 'connected' : (data.system.camera_mock_mode ? 'mock' : '')
     );
   } catch (err) {
     esp32StatusEl.textContent = 'ESP32: unavailable';
