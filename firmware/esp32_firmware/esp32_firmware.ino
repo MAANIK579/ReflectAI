@@ -1,4 +1,6 @@
+#include <Arduino.h>
 #include <WiFi.h>
+#include <WiFiClient.h>
 #include <HTTPClient.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
@@ -6,392 +8,271 @@
 #include <DHT.h>
 
 // =====================================================
-// REFLECTAI (AAINA)
-// COMPLETE ESP32 FIRMWARE
+// REFLECTAI (AAINA) — ESP32 FIRMWARE
+//
+// Hardware:
+//   - ESP32 NodeMCU / Dev Module (WROOM-32)
+//   - DHT22 (or DHT11) Temperature & Humidity Sensor
+//   - HC-SR501 / AM312 PIR Motion Sensor
+//   - LDR Light Sensor Module
+//   - 0.96" I2C OLED Display (SSD1306, 128x64)
+//   - Piezo Buzzer (Passive or Active)
+//   - 4 Push Buttons (User 1, User 2, Guest, Privacy)
+//
+// Required Arduino IDE Libraries:
+//   1. "Adafruit SSD1306" by Adafruit
+//   2. "Adafruit GFX Library" by Adafruit
+//   3. "DHT sensor library" by Adafruit
+//   4. "Adafruit Unified Sensor" by Adafruit
 // =====================================================
 
 // =====================================================
-// WIFI / RASPBERRY PI
+// WIFI / RASPBERRY PI CONFIGURATION
 // =====================================================
+const char* WIFI_SSID     = "Mithi papdi";
+const char* WIFI_PASSWORD = "9468665211";
 
-const char* WIFI_SSID = "Airtel_AP Wifi";
-const char* WIFI_PASSWORD = "Sdr@3232";
-
+// Target Raspberry Pi / Dashboard Backend API
+// Update IP if your Pi or PC IP changes
 const char* PI_STATE_URL =
-  "http://192.168.1.14:5000/api/esp32/state";
+  "http://192.168.173.9:5000/api/esp32/state";
 
-// Use the SAME token that is currently working
+// Security shared token matching backend
 const char* PI_SHARED_TOKEN =
   "KJwprEKT7YMu0WEYn0lcAJIZaNq0-m7tYr7Fx1vl9q8";
 
 // =====================================================
-// DHT22
+// PIN DEFINITIONS
 // =====================================================
+#define DHT_PIN      4     // DHT22 Data Pin
+#define DHT_TYPE     DHT22 // Change to DHT11 if using a DHT11 sensor
+#define PIR_PIN      27    // PIR Motion Sensor
+#define LDR_PIN      34    // LDR Light Sensor (ADC input)
 
-#define DHT_PIN 4
-#define DHT_TYPE DHT22
+#define USER1_PIN    13    // Profile 1 Button (Maanik) -> Active LOW (GND)
+#define USER2_PIN    25    // Profile 2 Button (Ayush)  -> Active LOW (GND)
+#define GUEST_PIN    14    // Guest Profile Button      -> Active LOW (GND)
+#define PRIVACY_PIN  26    // Privacy Toggle Button     -> Active LOW (GND)
 
-DHT dht(DHT_PIN, DHT_TYPE);
-
-// =====================================================
-// PIR
-// =====================================================
-
-#define PIR_PIN 27
-
-// =====================================================
-// LDR
-// =====================================================
-
-#define LDR_PIN 34
+#define BUZZER_PIN   18    // Piezo Buzzer Pin
 
 // =====================================================
-// OLED
+// OLED CONFIGURATION (I2C SDA=21, SCL=22)
 // =====================================================
-
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64
+#define OLED_RESET   -1
+#define OLED_ADDRESS 0x3C  // Default I2C address (auto-fallbacks to 0x3D)
 
-#define OLED_RESET -1
-#define OLED_ADDRESS 0x3C
-
-Adafruit_SSD1306 display(
-  SCREEN_WIDTH,
-  SCREEN_HEIGHT,
-  &Wire,
-  OLED_RESET
-);
-
-// =====================================================
-// BUTTONS
-// =====================================================
-
-#define USER1_PIN    13
-#define USER2_PIN    25
-#define GUEST_PIN    14
-#define PRIVACY_PIN  26
-
-// =====================================================
-// BUZZER
-// =====================================================
-
-#define BUZZER_PIN 18
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+DHT dht(DHT_PIN, DHT_TYPE);
 
 // =====================================================
 // SYSTEM STATE
 // =====================================================
-
 String currentUser = "Guest";
+bool privacyMode   = false;
 
-bool privacyMode = false;
-
-bool user1LastState = HIGH;
-bool user2LastState = HIGH;
-bool guestLastState = HIGH;
+bool user1LastState   = HIGH;
+bool user2LastState   = HIGH;
+bool guestLastState   = HIGH;
 bool privacyLastState = HIGH;
 
-// =====================================================
-// SENSOR VALUES
-// =====================================================
+unsigned long lastButtonTime[4] = {0, 0, 0, 0};
+const unsigned long DEBOUNCE_DELAY = 220; // 220ms debounce
 
 float temperature = NAN;
-float humidity = NAN;
+float humidity    = NAN;
+int   lightState  = LOW;
+int   motionState = LOW;
+bool  motionLatch = false; // Latches fast motion pulses until sent
 
-int lightState = LOW;
-int motionState = LOW;
+unsigned long lastDHTRead     = 0;
+unsigned long lastServerSend  = 0;
+unsigned long lastOLEDUpdate  = 0;
+int           serverFailCount = 0;
+int           dhtFailCount    = 0;
 
-// =====================================================
-// TIMERS
-// =====================================================
-
-unsigned long lastDHTRead = 0;
-unsigned long lastServerSend = 0;
-unsigned long lastOLEDUpdate = 0;
-
-const unsigned long DHT_INTERVAL = 2500;
-const unsigned long SERVER_INTERVAL = 3000;
-const unsigned long OLED_INTERVAL = 500;
+const unsigned long DHT_INTERVAL    = 2500; // Read DHT every 2.5s
+const unsigned long SERVER_INTERVAL = 3000; // Telemetry post every 3s
+const unsigned long OLED_INTERVAL   = 400;  // Update OLED every 400ms
 
 // =====================================================
-// BUZZER
+// FORWARD DECLARATIONS
 // =====================================================
+void beep(unsigned int durationMs = 80);
+void connectWiFi();
+void readDHT();
+void readSensors();
+void updateOLED();
+void sendToPi(bool forceImmediate);
+void sendToPi();
+void handleButtons();
 
-void beep() {
-
-  tone(BUZZER_PIN, 2000);
-
-  delay(150);
-
-  noTone(BUZZER_PIN);
+// =====================================================
+// BUZZER FEEDBACK
+// (Clean tone generator - 100% compatible across all ESP32 cores)
+// =====================================================
+void beep(unsigned int durationMs) {
+  pinMode(BUZZER_PIN, OUTPUT);
+  unsigned long start = millis();
+  while (millis() - start < durationMs) {
+    digitalWrite(BUZZER_PIN, HIGH);
+    delayMicroseconds(250); // 2 kHz tone
+    digitalWrite(BUZZER_PIN, LOW);
+    delayMicroseconds(250);
+  }
+  digitalWrite(BUZZER_PIN, LOW);
 }
 
 // =====================================================
 // WIFI CONNECTION
 // =====================================================
-
 void connectWiFi() {
+  if (WiFi.status() == WL_CONNECTED) {
+    return;
+  }
 
   Serial.println();
-  Serial.println("Connecting to Wi-Fi...");
+  Serial.print("Connecting to Wi-Fi: ");
+  Serial.println(WIFI_SSID);
 
   WiFi.mode(WIFI_STA);
-
-  WiFi.begin(
-    WIFI_SSID,
-    WIFI_PASSWORD
-  );
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
   int attempts = 0;
-
-  while (
-    WiFi.status() != WL_CONNECTED &&
-    attempts < 40
-  ) {
-
-    delay(500);
-
+  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+    delay(300);
     Serial.print(".");
-
     attempts++;
   }
 
   Serial.println();
-
   if (WiFi.status() == WL_CONNECTED) {
-
-    Serial.println("Wi-Fi CONNECTED");
-
+    Serial.println("[OK] Wi-Fi Connected!");
     Serial.print("ESP32 IP: ");
     Serial.println(WiFi.localIP());
-
   } else {
-
-    Serial.println("Wi-Fi CONNECTION FAILED");
+    Serial.print("[WARN] Wi-Fi Connection failed (status: ");
+    Serial.print(WiFi.status());
+    Serial.println("). Ensure hotspot is 2.4 GHz.");
   }
 }
 
 // =====================================================
-// DHT22
+// SENSORS
 // =====================================================
-
 void readDHT() {
-
-  if (
-    millis() - lastDHTRead <
-    DHT_INTERVAL
-  ) {
-
+  if (millis() - lastDHTRead < DHT_INTERVAL) {
     return;
   }
-
   lastDHTRead = millis();
 
-  float newTemperature =
-    dht.readTemperature();
+  float t = dht.readTemperature();
+  float h = dht.readHumidity();
 
-  float newHumidity =
-    dht.readHumidity();
-
-  if (
-    !isnan(newTemperature) &&
-    !isnan(newHumidity)
-  ) {
-
-    temperature = newTemperature;
-    humidity = newHumidity;
-
-    Serial.print("Temperature: ");
+  if (!isnan(t) && !isnan(h)) {
+    temperature = t;
+    humidity = h;
+    dhtFailCount = 0;
+    Serial.print("Temp: ");
     Serial.print(temperature, 1);
-
-    Serial.print(" C | Humidity: ");
+    Serial.print(" C | Hum: ");
     Serial.print(humidity, 1);
-
     Serial.println(" %");
-
   } else {
-
-    Serial.println(
-      "DHT22: READ ERROR"
-    );
+    dhtFailCount++;
+    if (dhtFailCount == 1 || dhtFailCount % 10 == 0) {
+      Serial.print("[WARN] DHT22 Read Warning (NaN attempt ");
+      Serial.print(dhtFailCount);
+      Serial.println("). Keeping previous reading.");
+    }
   }
 }
-
-// =====================================================
-// READ DIGITAL SENSORS
-// =====================================================
 
 void readSensors() {
+  // LDR Sensor (Digital DO comparator module or bare resistor divider)
+  lightState = digitalRead(LDR_PIN);
 
-  lightState =
-    digitalRead(LDR_PIN);
-
-  motionState =
-    digitalRead(PIR_PIN);
+  // PIR Motion Sensor
+  int pir = digitalRead(PIR_PIN);
+  if (pir == HIGH) {
+    motionState = HIGH;
+    motionLatch = true; // Latch motion until next telemetry packet
+  } else {
+    motionState = LOW;
+  }
 }
 
 // =====================================================
-// OLED
+// OLED DISPLAY
 // =====================================================
-
 void updateOLED() {
-
-  if (
-    millis() - lastOLEDUpdate <
-    OLED_INTERVAL
-  ) {
-
+  if (millis() - lastOLEDUpdate < OLED_INTERVAL) {
     return;
   }
-
   lastOLEDUpdate = millis();
 
   display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
 
-  display.setTextColor(
-    SSD1306_WHITE
-  );
-
-  // ---------------------------------------------------
-  // HEADER
-  // ---------------------------------------------------
-
+  // Header Banner
   display.setTextSize(1);
-
   display.setCursor(0, 0);
+  display.print("REFLECTAI");
 
-  display.println(
-    "REFLECTAI - AAINA"
-  );
-
-  display.drawLine(
-    0,
-    10,
-    127,
-    10,
-    SSD1306_WHITE
-  );
-
-  // ---------------------------------------------------
-  // PRIVACY MODE
-  // ---------------------------------------------------
+  // WiFi status indicator in header
+  display.setCursor(85, 0);
+  if (WiFi.status() == WL_CONNECTED) {
+    display.print("[WiFi]");
+  } else {
+    display.print("[NoNet]");
+  }
+  display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
 
   if (privacyMode) {
-
     display.setTextSize(2);
-
     display.setCursor(18, 22);
-
-    display.println(
-      "PRIVATE"
-    );
+    display.println("PRIVATE");
 
     display.setTextSize(1);
-
-    display.setCursor(25, 48);
-
-    display.println(
-      "Display Protected"
-    );
-
+    display.setCursor(12, 48);
+    display.println("Sensors & Cam Muted");
   } else {
-
-    // -------------------------------------------------
-    // USER
-    // -------------------------------------------------
-
+    // Current User
     display.setTextSize(1);
-
     display.setCursor(0, 14);
-
     display.print("User: ");
+    display.println(currentUser);
 
-    display.println(
-      currentUser
-    );
-
-    // -------------------------------------------------
-    // TEMPERATURE
-    // -------------------------------------------------
-
+    // Temperature
     display.setCursor(0, 27);
-
     display.print("Temp: ");
-
     if (isnan(temperature)) {
-
-      display.println("ERROR");
-
+      display.println("--.- C");
     } else {
-
-      display.print(
-        temperature,
-        1
-      );
-
+      display.print(temperature, 1);
       display.println(" C");
     }
 
-    // -------------------------------------------------
-    // HUMIDITY
-    // -------------------------------------------------
-
+    // Humidity
     display.setCursor(0, 38);
-
-    display.print("Hum: ");
-
+    display.print("Hum:  ");
     if (isnan(humidity)) {
-
-      display.println("ERROR");
-
+      display.println("-- %");
     } else {
-
-      display.print(
-        humidity,
-        0
-      );
-
+      display.print(humidity, 0);
       display.println(" %");
     }
 
-    // -------------------------------------------------
-    // LIGHT
-    // -------------------------------------------------
-
+    // Light Status
     display.setCursor(0, 50);
-
     display.print("Light:");
+    display.print(lightState == HIGH ? "BRIGHT" : "DARK");
 
-    if (lightState == HIGH) {
-
-      display.print(
-        "BRIGHT"
-      );
-
-    } else {
-
-      display.print(
-        "DARK"
-      );
-    }
-
-    // -------------------------------------------------
-    // MOTION
-    // -------------------------------------------------
-
+    // Motion Status
     display.setCursor(76, 50);
-
-    if (motionState == HIGH) {
-
-      display.print(
-        "MOTION"
-      );
-
-    } else {
-
-      display.print(
-        "NONE"
-      );
-    }
+    display.print((motionState == HIGH || motionLatch) ? "MOTION" : "IDLE");
   }
 
   display.display();
@@ -400,516 +281,217 @@ void updateOLED() {
 // =====================================================
 // SEND DATA TO RASPBERRY PI
 // =====================================================
-
 void sendToPi() {
+  sendToPi(false);
+}
 
-  if (
-    millis() - lastServerSend <
-    SERVER_INTERVAL
-  ) {
-
+void sendToPi(bool forceImmediate) {
+  // If not forced, check interval
+  if (!forceImmediate && (millis() - lastServerSend < SERVER_INTERVAL)) {
     return;
   }
 
+  // If Pi was unreachable, apply 8s backoff so main loop never stutters
+  if (!forceImmediate && serverFailCount > 0 && (millis() - lastServerSend < 8000)) {
+    return;
+  }
   lastServerSend = millis();
 
-  if (
-    WiFi.status() != WL_CONNECTED
-  ) {
-
-    Serial.println(
-      "Wi-Fi disconnected"
-    );
-
-    connectWiFi();
-
+  if (WiFi.status() != WL_CONNECTED) {
+    static unsigned long lastReconnectAttempt = 0;
+    if (millis() - lastReconnectAttempt > 8000) {
+      lastReconnectAttempt = millis();
+      Serial.println("[WiFi] Not connected. Attempting background reconnect...");
+      WiFi.reconnect();
+    }
     return;
   }
 
-  // ---------------------------------------------------
-  // SENSOR VALUES
-  // ---------------------------------------------------
+  String lightStatus = (lightState == HIGH) ? "bright" : "dark";
+  bool sendMotion = (motionState == HIGH) || motionLatch;
+  motionLatch = false; // Clear latch upon transmission
 
-  String lightStatus;
-
-  if (lightState == HIGH) {
-
-    lightStatus = "bright";
-
-  } else {
-
-    lightStatus = "dark";
-  }
-
-  // ---------------------------------------------------
-  // HTTP
-  // ---------------------------------------------------
-
-  HTTPClient http;
-
-  http.begin(
-    PI_STATE_URL
-  );
-
-  http.addHeader(
-    "Content-Type",
-    "application/json"
-  );
-
-  // IMPORTANT:
-  // Raspberry Pi backend expects this header.
-  http.addHeader(
-    "X-ReflectAI-Token",
-    PI_SHARED_TOKEN
-  );
-
-  // ---------------------------------------------------
-  // JSON
-  // ---------------------------------------------------
-
+  // Build clean JSON packet
   String json = "{";
-
   json += "\"device\":\"esp32\",";
   json += "\"status\":\"online\",";
 
   if (isnan(temperature)) {
-
     json += "\"temperature\":null,";
-
   } else {
-
-    json += "\"temperature\":";
-    json += String(
-      temperature,
-      1
-    );
-    json += ",";
+    json += "\"temperature\":" + String(temperature, 1) + ",";
   }
 
   if (isnan(humidity)) {
-
     json += "\"humidity\":null,";
-
   } else {
-
-    json += "\"humidity\":";
-    json += String(
-      humidity,
-      1
-    );
-    json += ",";
+    json += "\"humidity\":" + String(humidity, 1) + ",";
   }
 
-  json += "\"light\":\"";
-  json += lightStatus;
-  json += "\",";
-
-  json += "\"motion\":";
-
-  if (motionState == HIGH) {
-
-    json += "true";
-
-  } else {
-
-    json += "false";
-  }
-
-  json += ",";
-
-  json += "\"user\":\"";
-  json += currentUser;
-  json += "\",";
-
-  json += "\"privacy\":";
-
-  if (privacyMode) {
-
-    json += "true";
-
-  } else {
-
-    json += "false";
-  }
-
+  json += "\"light\":\"" + lightStatus + "\",";
+  json += "\"motion\":" + String(sendMotion ? "true" : "false") + ",";
+  json += "\"user\":\"" + currentUser + "\",";
+  json += "\"privacy\":" + String(privacyMode ? "true" : "false");
   json += "}";
 
-  // ---------------------------------------------------
-  // SEND
-  // ---------------------------------------------------
+  WiFiClient client;
+  HTTPClient http;
 
-  Serial.println();
-  Serial.println(
-    "Sending data to Raspberry Pi..."
-  );
+  if (!http.begin(client, PI_STATE_URL)) {
+    Serial.println("[ERROR] Unable to begin HTTPClient to Pi");
+    return;
+  }
 
-  Serial.print(
-    "JSON: "
-  );
+  http.setTimeout(2000); // 2 second timeout so loop never hangs
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("X-ReflectAI-Token", PI_SHARED_TOKEN);
 
-  Serial.println(
-    json
-  );
-
-  int httpCode =
-    http.POST(json);
-
-  Serial.print(
-    "HTTP Response: "
-  );
-
-  Serial.println(
-    httpCode
-  );
+  int httpCode = http.POST(json);
 
   if (httpCode > 0) {
-
-    String response =
-      http.getString();
-
-    Serial.print(
-      "Server Response: "
-    );
-
-    Serial.println(
-      response
-    );
+    serverFailCount = 0;
+    Serial.print("HTTP ");
+    Serial.print(httpCode);
+    Serial.print(" -> ");
+    String response = http.getString();
+    Serial.println(response);
+  } else {
+    serverFailCount++;
+    Serial.print("[HTTP ERROR] code: ");
+    Serial.print(httpCode);
+    Serial.print(" (");
+    Serial.print(HTTPClient::errorToString(httpCode));
+    Serial.print("). Check Pi server at ");
+    Serial.println(PI_STATE_URL);
   }
 
   http.end();
+  client.stop(); // Cleanly close socket
 }
 
 // =====================================================
-// BUTTON HANDLING
+// BUTTON HANDLING (Hardware Debounced + Instant Trigger)
 // =====================================================
-
 void handleButtons() {
+  unsigned long now = millis();
 
-  // ===================================================
-  // USER 1
-  // ===================================================
-
-  bool user1State =
-    digitalRead(USER1_PIN);
-
-  if (
-    user1State == LOW &&
-    user1LastState == HIGH
-  ) {
-
+  // USER 1 (Profile 1 - Maanik)
+  bool u1 = digitalRead(USER1_PIN);
+  if (u1 == LOW && user1LastState == HIGH && (now - lastButtonTime[0] > DEBOUNCE_DELAY)) {
+    lastButtonTime[0] = now;
     currentUser = "User 1";
-
     privacyMode = false;
-
-    Serial.println(
-      "USER 1 SELECTED"
-    );
-
+    Serial.println(">>> USER 1 (Profile 1) SELECTED <<<");
     beep();
+    updateOLED();
+    sendToPi(true);
   }
+  user1LastState = u1;
 
-  user1LastState =
-    user1State;
-
-  // ===================================================
-  // USER 2
-  // ===================================================
-
-  bool user2State =
-    digitalRead(USER2_PIN);
-
-  if (
-    user2State == LOW &&
-    user2LastState == HIGH
-  ) {
-
+  // USER 2 (Profile 2 - Ayush)
+  bool u2 = digitalRead(USER2_PIN);
+  if (u2 == LOW && user2LastState == HIGH && (now - lastButtonTime[1] > DEBOUNCE_DELAY)) {
+    lastButtonTime[1] = now;
     currentUser = "User 2";
-
     privacyMode = false;
-
-    Serial.println(
-      "USER 2 SELECTED"
-    );
-
+    Serial.println(">>> USER 2 (Profile 2) SELECTED <<<");
     beep();
+    updateOLED();
+    sendToPi(true);
   }
+  user2LastState = u2;
 
-  user2LastState =
-    user2State;
-
-  // ===================================================
-  // GUEST
-  // ===================================================
-
-  bool guestState =
-    digitalRead(GUEST_PIN);
-
-  if (
-    guestState == LOW &&
-    guestLastState == HIGH
-  ) {
-
+  // GUEST PROFILE
+  bool g = digitalRead(GUEST_PIN);
+  if (g == LOW && guestLastState == HIGH && (now - lastButtonTime[2] > DEBOUNCE_DELAY)) {
+    lastButtonTime[2] = now;
     currentUser = "Guest";
-
     privacyMode = false;
-
-    Serial.println(
-      "GUEST SELECTED"
-    );
-
+    Serial.println(">>> GUEST SELECTED <<<");
     beep();
+    updateOLED();
+    sendToPi(true);
   }
+  guestLastState = g;
 
-  guestLastState =
-    guestState;
-
-  // ===================================================
-  // PRIVACY
-  // ===================================================
-
-  bool privacyState =
-    digitalRead(PRIVACY_PIN);
-
-  if (
-    privacyState == LOW &&
-    privacyLastState == HIGH
-  ) {
-
-    privacyMode =
-      !privacyMode;
-
-    Serial.print(
-      "PRIVACY MODE: "
-    );
-
-    if (privacyMode) {
-
-      Serial.println(
-        "ON"
-      );
-
-    } else {
-
-      Serial.println(
-        "OFF"
-      );
-    }
-
+  // PRIVACY TOGGLE
+  bool p = digitalRead(PRIVACY_PIN);
+  if (p == LOW && privacyLastState == HIGH && (now - lastButtonTime[3] > DEBOUNCE_DELAY)) {
+    lastButtonTime[3] = now;
+    privacyMode = !privacyMode;
+    Serial.print(">>> PRIVACY MODE: ");
+    Serial.println(privacyMode ? "ON <<<" : "OFF <<<");
     beep();
+    updateOLED();
+    sendToPi(true);
   }
-
-  privacyLastState =
-    privacyState;
+  privacyLastState = p;
 }
 
 // =====================================================
-// SETUP
+// ARDUINO SETUP
 // =====================================================
-
 void setup() {
+  Serial.begin(115200);
+  delay(1000);
 
-  Serial.begin(
-    115200
-  );
+  Serial.println("\n================================");
+  Serial.println(" REFLECTAI - AAINA (ESP32)");
+  Serial.println("================================");
 
-  delay(2000);
+  // I2C for SSD1306 OLED (SDA=21, SCL=22)
+  Wire.begin(21, 22);
 
-  Serial.println();
-  Serial.println(
-    "================================"
-  );
-
-  Serial.println(
-    "REFLECTAI - AAINA"
-  );
-
-  Serial.println(
-    "ESP32 COMPLETE SYSTEM"
-  );
-
-  Serial.println(
-    "================================"
-  );
-
-  // ===================================================
-  // I2C
-  // ===================================================
-
-  Wire.begin(
-    21,
-    22
-  );
-
-  // ===================================================
-  // DHT22
-  // ===================================================
-
+  // Initialize DHT22
   dht.begin();
 
-  // ===================================================
-  // SENSOR PINS
-  // ===================================================
+  // Pin modes
+  pinMode(LDR_PIN, INPUT);
+  pinMode(PIR_PIN, INPUT);
 
-  pinMode(
-    LDR_PIN,
-    INPUT
-  );
+  pinMode(USER1_PIN, INPUT_PULLUP);
+  pinMode(USER2_PIN, INPUT_PULLUP);
+  pinMode(GUEST_PIN, INPUT_PULLUP);
+  pinMode(PRIVACY_PIN, INPUT_PULLUP);
 
-  pinMode(
-    PIR_PIN,
-    INPUT
-  );
+  pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(BUZZER_PIN, LOW);
 
-  // ===================================================
-  // BUTTONS
-  // ===================================================
-
-  pinMode(
-    USER1_PIN,
-    INPUT_PULLUP
-  );
-
-  pinMode(
-    USER2_PIN,
-    INPUT_PULLUP
-  );
-
-  pinMode(
-    GUEST_PIN,
-    INPUT_PULLUP
-  );
-
-  pinMode(
-    PRIVACY_PIN,
-    INPUT_PULLUP
-  );
-
-  // ===================================================
-  // BUZZER
-  // ===================================================
-
-  pinMode(
-    BUZZER_PIN,
-    OUTPUT
-  );
-
-  noTone(
-    BUZZER_PIN
-  );
-
-  // ===================================================
-  // OLED
-  // ===================================================
-
-  if (
-    !display.begin(
-      SSD1306_SWITCHCAPVCC,
-      OLED_ADDRESS
-    )
-  ) {
-
-    Serial.println(
-      "OLED FAILED!"
-    );
-
+  // Initialize OLED Display with automatic address fallback (0x3C -> 0x3D)
+  if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
+    if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3D)) {
+      Serial.println("[ERROR] OLED Display Init Failed! Check I2C wiring (SDA=21, SCL=22).");
+    } else {
+      Serial.println("[OK] OLED Display Ready at address 0x3D.");
+    }
   } else {
-
-    Serial.println(
-      "OLED: OK"
-    );
-
-    display.clearDisplay();
-
-    display.setTextColor(
-      SSD1306_WHITE
-    );
-
-    display.setTextSize(2);
-
-    display.setCursor(
-      5,
-      20
-    );
-
-    display.println(
-      "REFLECTAI"
-    );
-
-    display.display();
-
-    delay(1500);
+    Serial.println("[OK] OLED Display Ready at address 0x3C.");
   }
 
-  // ===================================================
-  // WIFI
-  // ===================================================
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+  display.setTextSize(2);
+  display.setCursor(10, 22);
+  display.println("REFLECTAI");
+  display.display();
+  delay(1000);
 
+  // Connect to Wi-Fi
   connectWiFi();
 
-  // ===================================================
-  // STATUS
-  // ===================================================
-
-  Serial.println();
-
-  Serial.println(
-    "SYSTEM STATUS"
-  );
-
-  Serial.println(
-    "---------------"
-  );
-
-  Serial.println(
-    "DHT22   : READY"
-  );
-
-  Serial.println(
-    "PIR     : READY"
-  );
-
-  Serial.println(
-    "LDR     : READY"
-  );
-
-  Serial.println(
-    "OLED    : READY"
-  );
-
-  Serial.println(
-    "BUTTONS : READY"
-  );
-
-  Serial.println(
-    "BUZZER  : READY"
-  );
-
-  Serial.println(
-    "Wi-Fi   : READY"
-  );
-
-  Serial.println(
-    "---------------"
-  );
-
   beep();
+  Serial.println("[READY] System initialized. Entering main loop.\n");
 }
 
 // =====================================================
-// LOOP
+// ARDUINO MAIN LOOP
 // =====================================================
-
 void loop() {
-
-  handleButtons();
-
-  readDHT();
-
-  readSensors();
-
-  updateOLED();
-
-  sendToPi();
+  handleButtons(); // Checks button presses & triggers instant Pi sync
+  readDHT();       // Periodic DHT read (every 2.5s)
+  readSensors();   // Digital LDR and PIR reads
+  updateOLED();    // Periodic OLED refresh (every 400ms)
+  sendToPi();      // Periodic sensor telemetry (every 3s)
 
   delay(20);
 }

@@ -42,59 +42,75 @@ logger = logging.getLogger("reflectai.classifier")
 
 MODEL_PATH = Path(__file__).resolve().parent.parent.parent / "models" / "clothing" / "fashion_classifier.pt"
 
-# Carefully calibrated zero-shot clothing prompts for flat-lay and wardrobe photos
+# Carefully calibrated zero-shot clothing prompts for flat-lay, wardrobe, and camera photos
 CLIP_PROMPTS: List[Tuple[str, str, str]] = [
-    # Topwear: Shirt (button-down, formal, patterned)
+    # Topwear: Shirt (button-down, formal, casual, collared, plaid)
     ("top", "Shirt", "a collared button-down dress shirt"),
-    ("top", "Shirt", "a patterned button-down shirt with collar"),
+    ("top", "Shirt", "a button-up collared shirt"),
+    ("top", "Shirt", "a patterned button-down shirt"),
     ("top", "Shirt", "a casual button-up shirt"),
+    ("top", "Shirt", "a plaid or checkered shirt"),
+
     # Topwear: T-Shirt & Polo
     ("top", "T-Shirt", "a casual t-shirt laid flat"),
-    ("top", "T-Shirt", "a round-neck graphic or plain t-shirt"),
+    ("top", "T-Shirt", "a round neck t-shirt"),
+    ("top", "T-Shirt", "a graphic tee"),
     ("top", "T-Shirt", "a polo shirt with collar"),
-    ("top", "Sweatshirt", "a hoodie or sweatshirt"),
-    # Bottomwear
+
+    # Topwear: Sweatshirt & Knitwear
+    ("top", "Sweatshirt", "a hoodie sweatshirt"),
+    ("top", "Sweatshirt", "a crewneck sweater or pullover"),
+
+    # Bottomwear: Jeans
     ("bottom", "Jeans", "a pair of denim jeans"),
-    ("bottom", "Track Pants", "a pair of athletic sweatpants, joggers, or track pants"),
-    ("bottom", "Track Pants", "sports lower or gym sweatpants with elastic drawstring"),
-    ("bottom", "Pants", "a pair of formal trousers or slacks"),
-    ("bottom", "Shorts", "a pair of casual shorts"),
-    # Outerwear & Footwear
-    ("outerwear", "Jacket", "a jacket, coat, blazer, or outerwear"),
-    ("footwear", "Shoes", "a pair of sneakers, running shoes, or footwear"),
+    ("bottom", "Jeans", "black denim jeans or blue jeans"),
+
+    # Bottomwear: Track Pants & Joggers
+    ("bottom", "Track Pants", "a pair of sweatpants or joggers"),
+    ("bottom", "Track Pants", "athletic track pants or sports lower"),
+    ("bottom", "Track Pants", "cotton sweatpants or track pants"),
+    ("bottom", "Track Pants", "grey sweatpants or track pants"),
+
+    # Bottomwear: Formal & Casual Pants
+    ("bottom", "Pants", "a pair of trousers, slacks, or pants"),
+    ("bottom", "Pants", "chino pants or casual trousers"),
+
+    # Bottomwear: Shorts
+    ("bottom", "Shorts", "a pair of shorts"),
+
+    # Outerwear
+    ("outerwear", "Jacket", "a jacket, coat, or blazer"),
+
+    # Footwear
+    ("footwear", "Shoes", "a pair of shoes or sneakers"),
 ]
 
 # ImageNet categories mapped to core ReflectAI categories ('top', 'bottom', 'footwear', 'outerwear', 'accessory')
-# Non-wardrobe noise categories (hats, mailbags, umbrellas) excluded to prevent false positives on patterned fabrics
+# Weights kept gentle so ImageNet acts as a secondary signal and never overrides OpenCLIP
 IMAGENET_CLOTHING_MAP: Dict[str, Tuple[str, str, float]] = {
-    # Bottomwear (keyword: (category, sub_category, weight))
-    "jean": ("bottom", "Jeans", 4.5),
-    "pajama": ("bottom", "Pants", 3.2),
-    "swimming trunks": ("bottom", "Shorts", 3.0),
+    # Bottomwear
+    "jean": ("bottom", "Jeans", 0.5),
+    "pajama": ("bottom", "Pants", 0.4),
+    "swimming trunks": ("bottom", "Shorts", 0.4),
     # Topwear
-    "jersey": ("top", "T-Shirt", 3.5),
-    "t-shirt": ("top", "T-Shirt", 4.0),
-    "sweatshirt": ("top", "Sweatshirt", 3.2),
-    "cardigan": ("top", "Cardigan", 3.0),
-    "suit": ("top", "Blazer", 2.5),
-    "academic gown": ("top", "Topwear", 2.0),
-    "kimono": ("top", "Topwear", 2.0),
-    "poncho": ("top", "Topwear", 2.0),
+    "jersey": ("top", "T-Shirt", 0.5),
+    "t-shirt": ("top", "T-Shirt", 0.5),
+    "sweatshirt": ("top", "Sweatshirt", 0.5),
+    "cardigan": ("top", "Cardigan", 0.4),
+    "suit": ("top", "Blazer", 0.4),
     # Outerwear
-    "trench coat": ("outerwear", "Coat", 3.8),
-    "fur coat": ("outerwear", "Jacket", 3.0),
-    "cloak": ("outerwear", "Outerwear", 2.5),
+    "trench coat": ("outerwear", "Coat", 0.5),
+    "fur coat": ("outerwear", "Jacket", 0.4),
     # Footwear
-    "running shoe": ("footwear", "Shoes", 4.0),
-    "sandal": ("footwear", "Sandals", 3.5),
-    "cowboy boot": ("footwear", "Boots", 3.5),
-    "loafer": ("footwear", "Loafers", 3.5),
-    "clog": ("footwear", "Shoes", 3.0),
-    "oxford": ("footwear", "Formal Shoes", 3.5),
-    "sock": ("footwear", "Socks", 2.0),
+    "running shoe": ("footwear", "Shoes", 0.5),
+    "sandal": ("footwear", "Sandals", 0.4),
+    "cowboy boot": ("footwear", "Boots", 0.4),
+    "loafer": ("footwear", "Loafers", 0.4),
+    "clog": ("footwear", "Shoes", 0.4),
+    "oxford": ("footwear", "Formal Shoes", 0.4),
     # Accessories
-    "necktie": ("accessory", "Tie", 4.0),
-    "bow tie": ("accessory", "Bow Tie", 4.0),
+    "necktie": ("accessory", "Tie", 0.4),
+    "bow tie": ("accessory", "Bow Tie", 0.4),
 }
 
 VALID_FASHION_CLASSES = {
@@ -279,8 +295,8 @@ class ClothingClassifier:
                     h, w = img_bgr.shape[:2]
                     aspect_ratio = h / max(1, w)
                     color = cls.detect_fabric_color(img_bgr)
-                    cat = "bottom" if aspect_ratio > 1.25 else "top"
-                    sub = "Jeans" if cat == "bottom" else "Shirt"
+                    cat = "top"
+                    sub = "Shirt"
                     return {
                         "category": cat,
                         "sub_category": sub,
@@ -314,10 +330,12 @@ class ClothingClassifier:
             # 1. Dominant Fabric Color
             color = cls.detect_fabric_color(img_bgr)
 
-            # 2. OpenCLIP Zero-Shot Clothing Recognition
+            # 2. OpenCLIP Zero-Shot Clothing Recognition (Primary Model)
+            has_clip = (cls._clip_model is not None and cls._clip_preprocess is not None and cls._clip_text_features is not None)
             clip_cat_scores = {"top": 0.0, "bottom": 0.0, "outerwear": 0.0, "footwear": 0.0}
             clip_sub_scores: Dict[Tuple[str, str], float] = {}
-            if cls._clip_model is not None and cls._clip_preprocess is not None and cls._clip_text_features is not None:
+
+            if has_clip:
                 try:
                     img_clip_tensor = cls._clip_preprocess(img_pil).unsqueeze(0)
                     with torch.no_grad():
@@ -330,37 +348,41 @@ class ClothingClassifier:
                         clip_sub_scores[(cat, sub)] = clip_sub_scores.get((cat, sub), 0.0) + p_val
                 except Exception as e:
                     logger.debug(f"OpenCLIP inference pass: {e}")
+                    has_clip = False
 
-            # 3. Deep Vision Ensemble with ImageNet Backbone
             cat_scores = {
-                "top": clip_cat_scores["top"] * 4.0,
-                "bottom": clip_cat_scores["bottom"] * 4.0,
-                "outerwear": clip_cat_scores["outerwear"] * 4.0,
-                "footwear": clip_cat_scores["footwear"] * 4.0,
+                "top": clip_cat_scores["top"],
+                "bottom": clip_cat_scores["bottom"],
+                "outerwear": clip_cat_scores["outerwear"],
+                "footwear": clip_cat_scores["footwear"],
                 "accessory": 0.0,
             }
             best_sub = None
             best_sub_score = 0.0
 
-            if cls._imagenet_model is not None and cls._imagenet_transforms is not None:
-                tensor_in = cls._imagenet_transforms(img_pil).unsqueeze(0)
-                with torch.no_grad():
-                    probs = cls._imagenet_model(tensor_in).squeeze(0).softmax(0)
+            # 3. Fallback to ImageNet Backbone if OpenCLIP is unavailable
+            if not has_clip and cls._imagenet_model is not None and cls._imagenet_transforms is not None:
+                try:
+                    tensor_in = cls._imagenet_transforms(img_pil).unsqueeze(0)
+                    with torch.no_grad():
+                        probs = cls._imagenet_model(tensor_in).squeeze(0).softmax(0)
 
-                for idx, prob in enumerate(probs):
-                    p_val = prob.item()
-                    if p_val < 0.01:
-                        continue
-                    cat_name = cls._imagenet_categories[idx].lower()
-                    for key, (core_cat, sub_name, weight) in IMAGENET_CLOTHING_MAP.items():
-                        if key in cat_name:
-                            weighted_p = p_val * weight
-                            cat_scores[core_cat] += weighted_p
-                            if weighted_p > best_sub_score:
-                                best_sub_score = weighted_p
-                                best_sub = sub_name
+                    for idx, prob in enumerate(probs):
+                        p_val = prob.item()
+                        if p_val < 0.02:
+                            continue
+                        cat_name = cls._imagenet_categories[idx].lower()
+                        for key, (core_cat, sub_name, weight) in IMAGENET_CLOTHING_MAP.items():
+                            if key in cat_name:
+                                weighted_p = p_val * weight
+                                cat_scores[core_cat] += weighted_p
+                                if weighted_p > best_sub_score:
+                                    best_sub_score = weighted_p
+                                    best_sub = sub_name
+                except Exception as e:
+                    logger.debug(f"ImageNet inference pass: {e}")
 
-            # 4. Auxiliary Fashion Checkpoint (with non-clothing noise masked out)
+            # 4. Auxiliary Fashion Checkpoint (for gender extraction and apparel fallback)
             gender = "Unisex"
             if cls._model is not None:
                 try:
@@ -368,22 +390,23 @@ class ClothingClassifier:
                     with torch.no_grad():
                         preds = cls._model(t_fash)
 
-                    sub_classes = cls._encoder_classes.get("subCategory", [])
-                    if "subCategory" in preds and sub_classes:
-                        sub_logits = preds["subCategory"][0].clone()
-                        for i, sc in enumerate(sub_classes):
-                            if sc not in VALID_FASHION_CLASSES:
-                                sub_logits[i] = -1e9
-                        top_sub_idx = int(sub_logits.argmax().item())
-                        fash_sub = sub_classes[top_sub_idx]
-                        if fash_sub == "Bottomwear":
-                            cat_scores["bottom"] += 1.5
-                        elif fash_sub == "Topwear":
-                            cat_scores["top"] += 1.2
-                        elif fash_sub in ("Shoes", "Sandal", "Flip Flops"):
-                            cat_scores["footwear"] += 2.0
-                        elif fash_sub == "Jackets":
-                            cat_scores["outerwear"] += 2.0
+                    if not has_clip:
+                        sub_classes = cls._encoder_classes.get("subCategory", [])
+                        if "subCategory" in preds and sub_classes:
+                            sub_logits = preds["subCategory"][0].clone()
+                            for i, sc in enumerate(sub_classes):
+                                if sc not in VALID_FASHION_CLASSES:
+                                    sub_logits[i] = -1e9
+                            top_sub_idx = int(sub_logits.argmax().item())
+                            fash_sub = sub_classes[top_sub_idx]
+                            if fash_sub == "Bottomwear":
+                                cat_scores["bottom"] += 1.0
+                            elif fash_sub == "Topwear":
+                                cat_scores["top"] += 1.0
+                            elif fash_sub in ("Shoes", "Sandal", "Flip Flops"):
+                                cat_scores["footwear"] += 1.0
+                            elif fash_sub == "Jackets":
+                                cat_scores["outerwear"] += 1.0
 
                     if "gender" in preds:
                         g_classes = cls._encoder_classes.get("gender", [])
@@ -393,57 +416,41 @@ class ClothingClassifier:
                 except Exception as e:
                     logger.debug(f"Auxiliary model inference pass: {e}")
 
-            # 5. Geometric Bifurcation & Aspect Ratio Priors
-            if aspect_ratio > 1.25:
-                # Check for bilateral symmetric leg separation in bottom 50% to 90%
-                bottom_half = img_bgr[int(h * 0.5):int(h * 0.9), :]
-                gray = cv2.cvtColor(bottom_half, cv2.COLOR_BGR2GRAY)
-                col_mean = np.mean(gray, axis=0)
-                bw = len(col_mean)
-                if bw > 20:
-                    left_m = float(np.mean(col_mean[int(bw * 0.15):int(bw * 0.35)]))
-                    right_m = float(np.mean(col_mean[int(bw * 0.65):int(bw * 0.85)]))
-                    center_m = float(np.mean(col_mean[int(bw * 0.35):int(bw * 0.65)]))
-                    leg_sym = abs(left_m - right_m)
-                    gap_l = abs(left_m - center_m)
-                    gap_r = abs(right_m - center_m)
-                    # Real pants: two legs have similar color and distinct contrast with center floor/bed
-                    is_confident_shirt = clip_sub_scores.get(("top", "Shirt"), 0.0) > 0.35
-                    if leg_sym < 20 and gap_l > 15 and gap_r > 15 and not is_confident_shirt:
-                        cat_scores["bottom"] += 4.0
-            elif aspect_ratio < 1.0:
-                cat_scores["top"] += 1.5
-
-            # Region overrides (from mirror live crops)
+            # 5. Region priors (soft guidance from camera crop regions, not hard override)
             if region == "bottom":
-                cat_scores["bottom"] += 10.0
+                cat_scores["bottom"] += 0.3
             elif region == "top":
-                cat_scores["top"] += 10.0
+                cat_scores["top"] += 0.3
 
             # Determine Winning Core Category
             winning_cat = max(cat_scores, key=cat_scores.get)
-            if cat_scores[winning_cat] == 0:
-                winning_cat = "bottom" if aspect_ratio > 1.25 else "top"
+            if cat_scores[winning_cat] <= 0.05:
+                winning_cat = "top"  # Default to topwear if completely ambiguous
+
+            # Compute normalized confidence score
+            total_score = sum(cat_scores.values())
+            raw_conf = (cat_scores[winning_cat] / max(1e-6, total_score)) if total_score > 0 else 0.85
+            confidence = round(min(1.0, max(0.5, float(raw_conf))), 2)
 
             # Assign clean, intuitive sub-category label
             if winning_cat == "top":
                 top_subs = {k[1]: v for k, v in clip_sub_scores.items() if k[0] == "top"}
-                if top_subs and max(top_subs.values()) > 0.10:
+                if top_subs and max(top_subs.values()) > 0.08:
                     best_sub = max(top_subs, key=top_subs.get)
                 elif not best_sub or best_sub not in ("Shirt", "T-Shirt", "Sweatshirt", "Polo", "Cardigan", "Blazer"):
-                    best_sub = "T-Shirt"
+                    best_sub = "Shirt"
             elif winning_cat == "bottom":
                 bot_subs = {k[1]: v for k, v in clip_sub_scores.items() if k[0] == "bottom"}
-                if bot_subs and max(bot_subs.values()) > 0.10:
+                if bot_subs and max(bot_subs.values()) > 0.08:
                     best_sub = max(bot_subs, key=bot_subs.get)
                 elif not best_sub or best_sub not in ("Jeans", "Track Pants", "Pants", "Shorts"):
                     best_sub = "Pants"
 
-                # Refine pants/jeans/track pants
+                # Refine pants / jeans
                 if best_sub == "Pants":
                     if color in ("Blue", "Navy Blue") or (color == "Black" and bot_subs.get("Jeans", 0) > 0.05):
                         best_sub = "Jeans"
-                    elif color in ("White", "Grey") and (bot_subs.get("Track Pants", 0) > 0.05 or aspect_ratio > 1.3):
+                    elif color in ("White", "Grey") and (bot_subs.get("Track Pants", 0) > 0.05):
                         best_sub = "Track Pants"
             elif winning_cat == "outerwear":
                 if not best_sub or best_sub not in ("Jacket", "Coat"):
@@ -465,6 +472,7 @@ class ClothingClassifier:
                 "master_category": "Apparel" if winning_cat in ("top", "bottom") else winning_cat.title(),
                 "gender": gender,
                 "suggested_name": suggested_name,
+                "confidence": confidence,
             }
         except Exception as e:
             logger.error(f"Classification failed: {e}", exc_info=True)

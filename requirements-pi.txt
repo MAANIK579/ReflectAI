@@ -3,3 +3,5 @@
 # Kept separate from requirements.txt so Mac development never needs
 # Pi-only packages installed.
 -r requirements.txt
+-r voice_engine/requirements.txt
+piper-tts

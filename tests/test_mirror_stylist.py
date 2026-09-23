@@ -180,6 +180,24 @@ class TestMirrorStylist(unittest.TestCase):
         overall_data = res_overall.get_json()
         self.assertIn("grooming", overall_data)
 
+    def test_mirror_stylist_single_shirt_no_phantom_pants(self):
+        """Ensure that when only a shirt is visible, MirrorStylist does not hallucinate pants."""
+        user_id = "single_shirt_user"
+        detected = {
+            "category": "top",
+            "color": "White",
+            "sub_category": "Shirt",
+            "suggested_name": "White Shirt",
+            "confidence": 0.95,
+        }
+        result = MirrorStylist.assess_clothing(user_id, precomputed_detection=detected)
+        self.assertEqual(result["status"], "ok")
+        self.assertIsNone(result["detected"]["bottom"])
+        self.assertEqual(result["detected"]["name"], "White Shirt")
+        self.assertNotIn("+", result["detected"]["name"])
+        self.assertIn("wearing your White Shirt", result["voice_summary"])
+        self.assertNotIn("with", result["voice_summary"])
+
 
 if __name__ == "__main__":
     unittest.main()

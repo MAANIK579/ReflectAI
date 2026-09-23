@@ -50,10 +50,14 @@ class MirrorStylist:
         detected_color = (detected.get("color") or "Neutral").title()
         detected_name = detected.get("suggested_name") or f"{detected_color} {detected_cat.title()}"
 
-        # Detect bottomwear if camera sees lower body
+        # Detect bottomwear only if camera sees lower body AND it is genuinely a bottom garment
         detected_bottom = None
         if image_bottom_bytes is not None:
-            detected_bottom = ClothingClassifier.classify(image_bottom_bytes, region="bottom")
+            raw_bot = ClothingClassifier.classify(image_bottom_bytes, region="bottom")
+            if raw_bot and raw_bot.get("category") == "bottom" and raw_bot.get("confidence", 0.0) >= 0.45:
+                # Ensure it's not simply an identical crop/reflection of topwear
+                if not (raw_bot.get("sub_category") == detected.get("sub_category") and raw_bot.get("color") == detected.get("color")):
+                    detected_bottom = raw_bot
 
         # 2. Fetch live environmental & user context
         weather = WeatherService.get_weather()

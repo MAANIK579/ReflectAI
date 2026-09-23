@@ -184,6 +184,55 @@ class TestWardrobeAndOutfitEngine(unittest.TestCase):
         self.assertIn("prediction", data)
         self.assertIn("category", data["prediction"])
 
+    def test_shirt_not_misclassified_as_pants(self):
+        """Verify real user shirts are recognized as top/Shirt and never as bottom/Pants."""
+        from app.recommendations.clothing_classifier import ClothingClassifier
+        import os
+        from pathlib import Path
+
+        wardrobe_dir = Path("data/wardrobe/maanik")
+        if not wardrobe_dir.exists():
+            self.skipTest("Wardrobe test images not present")
+
+        shirt_files = ["c12b2f650091.jpg", "e118ad72a047.jpg"]
+        for fn in shirt_files:
+            p = wardrobe_dir / fn
+            if p.exists():
+                res = ClothingClassifier.classify(p)
+                self.assertIsNotNone(res)
+                self.assertEqual(res["category"], "top", f"Shirt {fn} misclassified as {res['category']}")
+                self.assertEqual(res["sub_category"], "Shirt", f"Shirt {fn} subcategory was {res['sub_category']}")
+                self.assertNotEqual(res["category"], "bottom")
+
+    def test_bottom_accurately_classified(self):
+        """Verify real user bottomwear is recognized as bottomwear."""
+        from app.recommendations.clothing_classifier import ClothingClassifier
+        from pathlib import Path
+
+        wardrobe_dir = Path("data/wardrobe/maanik")
+        if not wardrobe_dir.exists():
+            self.skipTest("Wardrobe test images not present")
+
+        bottom_files = ["66027f813ef4.jpg", "8b05794d1f1b.jpg", "c54f285323ab.jpg"]
+        for fn in bottom_files:
+            p = wardrobe_dir / fn
+            if p.exists():
+                res = ClothingClassifier.classify(p)
+                self.assertIsNotNone(res)
+                self.assertEqual(res["category"], "bottom", f"Garment {fn} misclassified as {res['category']}")
+
+    def test_portrait_shirt_does_not_default_to_bottom(self):
+        """Verify that portrait vertical aspect ratio (> 1.25) does not bias towards pants."""
+        from app.recommendations.clothing_classifier import ClothingClassifier
+        from pathlib import Path
+
+        # Both sample shirts have portrait aspect ratio ~1.78
+        for fn in ["c12b2f650091.jpg", "e118ad72a047.jpg"]:
+            p = Path("data/wardrobe/maanik") / fn
+            if p.exists():
+                res = ClothingClassifier.classify(p)
+                self.assertEqual(res["category"], "top")
+
 
 if __name__ == "__main__":
     unittest.main()

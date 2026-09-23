@@ -496,7 +496,14 @@ def esp32_state():
             _last_esp32_user = raw_user
             # map "User 1" -> "user1", "User 2" -> "user2", "Guest" -> "guest"
             user_id = raw_user.strip().lower().replace(" ", "")
-            if UserRepository.get(user_id) is not None:
+            if UserRepository.get(user_id) is None and user_id != "guest":
+                registered = UserRepository.get_all()
+                if user_id in ("user1", "1") and len(registered) > 0:
+                    user_id = registered[0]["id"]
+                elif user_id in ("user2", "2") and len(registered) > 1:
+                    user_id = registered[1]["id"]
+
+            if UserRepository.get(user_id) is not None or user_id == "guest":
                 SettingsRepository.set("active_user", user_id)
                 logger.info(f"ESP32 physical button switched active user to: {user_id}")
 
