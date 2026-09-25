@@ -153,7 +153,7 @@ async function updateStatus() {
         }
       }
       if (voiceStateTextEl) {
-        voiceStateTextEl.textContent = data.voice.state === 'speaking' ? 'Speaking Briefing...' : (data.voice.state + '...');
+        voiceStateTextEl.textContent = data.voice.state.charAt(0).toUpperCase() + data.voice.state.slice(1) + '...';
       }
       if (voiceTranscriptEl) {
         if (data.voice.text && data.voice.text !== 'Voice Concierge Briefing') {
@@ -335,4 +335,83 @@ setInterval(updateStatus, 1000 * 5);       // Poll active user and privacy statu
 setInterval(updateCalendar, 1000 * 30);     // Periodic calendar refresh
 setInterval(updateOutfit, 1000 * 60 * 30);  // Outfit refresh every 30 mins
 setInterval(updateWeather, 1000 * 60 * 10); // Weather refresh every 10 mins
+
+// Voice Assistant Interactive Modal
+function openVoiceModal() {
+  const modal = document.getElementById('voice-ask-modal');
+  if (modal) {
+    modal.style.display = 'flex';
+    const input = document.getElementById('voice-ask-input');
+    if (input) setTimeout(() => input.focus(), 50);
+  }
+}
+
+function closeVoiceModal() {
+  const modal = document.getElementById('voice-ask-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function quickAsk(text) {
+  const input = document.getElementById('voice-ask-input');
+  if (input) {
+    input.value = text;
+    submitVoiceQuery();
+  }
+}
+
+async function submitVoiceQuery() {
+  const input = document.getElementById('voice-ask-input');
+  const submitBtn = document.getElementById('voice-ask-submit');
+  const respEl = document.getElementById('voice-modal-response');
+  if (!input || !input.value.trim()) return;
+
+  const query = input.value.trim();
+  if (submitBtn) submitBtn.disabled = true;
+  if (respEl) {
+    respEl.style.display = 'block';
+    respEl.innerHTML = '<span style="color: #94a3b8;">ReflectAI is thinking...</span>';
+  }
+
+  try {
+    const res = await fetch('/api/voice/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: query, user_id: currentUserId || '' }),
+    });
+    const data = await res.json();
+    if (respEl) {
+      if (data.status === 'ok') {
+        respEl.innerHTML = `<strong>Assistant:</strong> ${escapeHtml(data.reply || 'No reply generated.')}`;
+        setTimeout(updateStatus, 300);
+        if (data.action && (data.action.includes('reminder') || data.action.includes('user') || data.action.includes('privacy'))) {
+          setTimeout(() => {
+            updateCalendar(currentUserId);
+            updateOutfit(currentUserId);
+          }, 600);
+        }
+      } else {
+        respEl.innerHTML = `<span style="color: #ef4444;">Error: ${escapeHtml(data.message || 'Failed to process query')}</span>`;
+      }
+    }
+  } catch (err) {
+    if (respEl) {
+      respEl.innerHTML = `<span style="color: #ef4444;">Network error connecting to Voice Assistant</span>`;
+    }
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
+  }
+}
+
+// Press 'v' to toggle voice modal
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'v' || e.key === 'V') {
+    const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+    if (activeTag !== 'input' && activeTag !== 'textarea') {
+      e.preventDefault();
+      openVoiceModal();
+    }
+  } else if (e.key === 'Escape') {
+    closeVoiceModal();
+  }
+});
 

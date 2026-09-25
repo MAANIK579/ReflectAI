@@ -76,10 +76,13 @@
         <span class="weather-bullet">·</span>
         <span id="sensor-light-motion">--</span>
       </div>
-      <div style="margin-top: 10px;">
+      <div style="margin-top: 10px; display: flex; gap: 8px; align-items: center;">
         <a href="/app" style="color: #888; font-size: 0.72rem; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; border: 1px solid rgba(255,255,255,0.1); padding: 3px 8px; border-radius: 12px; background: rgba(255,255,255,0.03);">
           <span>📱</span> Mobile Companion
         </a>
+        <button id="voice-ask-btn" onclick="openVoiceModal()" style="cursor: pointer; color: #f59e0b; font-size: 0.72rem; border: 1px solid rgba(245,158,11,0.3); padding: 3px 8px; border-radius: 12px; background: rgba(245,158,11,0.08); display: inline-flex; align-items: center; gap: 4px;">
+          <span>🎙️</span> Ask ReflectAI
+        </button>
       </div>
     </section>
 
@@ -118,6 +121,35 @@
     </section>
 
   </main>
+
+  <!-- Voice Assistant Interactive Modal -->
+  <div id="voice-ask-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); z-index: 999; align-items: center; justify-content: center;">
+    <div style="background: #141417; border: 1px solid rgba(255,255,255,0.15); border-radius: 16px; padding: 22px; max-width: 440px; width: 90%; color: #fff; box-shadow: 0 20px 40px rgba(0,0,0,0.6);">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+        <div style="display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 1.05rem;">
+          <span style="color: #f59e0b;">🎙️</span> Voice Assistant
+        </div>
+        <button onclick="closeVoiceModal()" style="background: none; border: none; color: #888; font-size: 1.3rem; cursor: pointer; line-height: 1;">&times;</button>
+      </div>
+      <p style="font-size: 0.78rem; color: #94a3b8; margin-bottom: 12px;">
+        Ask anything about your profile, wardrobe, outfit recommendations, reminders, room temperature, or system settings:
+      </p>
+      <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+        <input type="text" id="voice-ask-input" placeholder="e.g. What clothes do I have?" style="flex: 1; background: #1e1e24; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 10px 12px; color: #fff; font-size: 0.88rem; outline: none;" onkeydown="if(event.key==='Enter') submitVoiceQuery()" />
+        <button onclick="submitVoiceQuery()" id="voice-ask-submit" style="background: #f59e0b; color: #000; font-weight: 600; border: none; border-radius: 8px; padding: 0 16px; cursor: pointer; font-size: 0.88rem;">Ask</button>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px;">
+        <button class="voice-chip" onclick="quickAsk('Who am I?')">Who am I?</button>
+        <button class="voice-chip" onclick="quickAsk('What are my reminders?')">Reminders</button>
+        <button class="voice-chip" onclick="quickAsk('What clothes do I have?')">Wardrobe</button>
+        <button class="voice-chip" onclick="quickAsk('What should I wear today?')">Outfit</button>
+        <button class="voice-chip" onclick="quickAsk('What is the room temperature?')">Room Temp</button>
+        <button class="voice-chip" onclick="quickAsk('Who is registered?')">Users</button>
+      </div>
+      <div id="voice-modal-response" style="display: none; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.25); border-radius: 8px; padding: 12px; font-size: 0.85rem; line-height: 1.4; color: #fef3c7;">
+      </div>
+    </div>
+  </div>
 
   <script src="/assets/script.js"></script>
 </body>

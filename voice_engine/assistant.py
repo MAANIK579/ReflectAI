@@ -38,8 +38,19 @@ except ImportError:
     _HAS_VOSK = False
 
 import os
+import sys
+from pathlib import Path
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = Path(SCRIPT_DIR).resolve().parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+try:
+    from app.assistant import VoiceBrain
+    _HAS_VOICE_BRAIN = True
+except Exception:
+    _HAS_VOICE_BRAIN = False
 
 # ---------- Config ----------
 SAMPLE_RATE = 16000
@@ -75,6 +86,7 @@ LLM_MODEL_PATH = get_best_llm_model()
 WEATHER_API_URL = "http://localhost:5000/api/weather"
 VOICE_EVENT_URL = "http://localhost:5000/api/voice/event"
 ACTIVE_USER_URL = "http://localhost:5000/api/status"  # we use /api/status now to get active user and schedule
+VOICE_ASK_URL = "http://localhost:5000/api/voice/ask"
 
 
 def notify_ui(state_name, text="", reply=""):
@@ -146,7 +158,7 @@ if not use_whisper and _HAS_VOSK and os.path.exists(VOSK_MODEL_PATH):
     vosk_model = VoskModel(VOSK_MODEL_PATH)
     print("  STT Engine: Vosk")
 
-llm = Llama(model_path=LLM_MODEL_PATH, n_ctx=1024, n_threads=4, verbose=False)
+llm = Llama(model_path=LLM_MODEL_PATH, n_ctx=2048, n_threads=4, verbose=False)
 print(f"  LLM Model: {os.path.basename(LLM_MODEL_PATH)}")
 
 audio_queue = queue.Queue()
@@ -314,11 +326,41 @@ def transcribe(raw_frames):
 
 def handle_command(text):
     print(f"You said: {text}")
-    if text:
-        notify_ui("processing", text=text)
-        reply = ask_llm(text)
-    else:
+    if not text:
         reply = "Sorry, I didn't catch that."
+        notify_ui("speaking", text=text, reply=reply)
+        speak(reply)
+        notify_ui("idle")
+        print("\nReady. Say 'hey jarvis' to start.")
+        return
+
+    notify_ui("processing", text=text)
+    reply = ""
+
+    # 1. Try querying the mirror dashboard backend
+    try:
+        res = requests.post(
+            VOICE_ASK_URL,
+            json={"query": text, "speak_mirror": False},
+            timeout=8,
+        )
+        if res.status_code == 200:
+            data = res.json()
+            reply = data.get("reply", "")
+    except Exception:
+        pass
+
+    # 2. Offline fallback if dashboard backend is not running
+    if not reply and _HAS_VOICE_BRAIN:
+        try:
+            res = VoiceBrain.process_query(text)
+            reply = res.get("reply", "")
+        except Exception as e:
+            print(f"VoiceBrain offline query error: {e}")
+
+    # 3. Fallback to basic local LLM query
+    if not reply:
+        reply = ask_llm(text)
 
     notify_ui("speaking", text=text, reply=reply)
     speak(reply)

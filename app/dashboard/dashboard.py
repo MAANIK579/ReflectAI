@@ -10,12 +10,13 @@ import json
 import logging
 import os
 import re
+import threading
 import time
 import uuid
 
 from flask import Flask, jsonify, render_template, request, send_from_directory, Response
 
-from app.assistant import VoiceConciergeService
+from app.assistant import VoiceConciergeService, VoiceBrain
 from app.calendar import CalendarService
 from app.config.settings import settings
 from app.database.repositories import (
@@ -437,6 +438,87 @@ def voice_stop():
     _voice_state["text"] = ""
     _voice_state["reply"] = ""
     return jsonify({"status": "ok", "message": "Voice playback stopped"})
+
+
+@app.route("/api/voice/ask", methods=["POST"])
+def voice_ask():
+    """
+    Unified voice assistant query endpoint connected to everything:
+    user profile, all database tables, wardrobe, reminders, ESP32, vision, weather, calendar.
+    Updates the smart mirror HUD overlay with transcript and reply in real time.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    query = (data.get("query") or "").strip()
+    if not query:
+        return jsonify({"status": "error", "message": "Query parameter cannot be empty"}), 400
+
+    user_id = data.get("user_id") or SettingsRepository.get("active_user", default="guest")
+    speak_mirror = bool(data.get("speak_mirror", False))
+
+    # Update mirror HUD overlay to processing
+    _voice_state["state"] = "processing"
+    _voice_state["text"] = query
+    _voice_state["reply"] = ""
+
+    result = VoiceBrain.process_query(
+        query=query,
+        user_id=user_id,
+        esp32_data=_esp32_state,
+        stylist_data=_live_stylist_state.get(user_id),
+        grooming_data=_live_grooming_state.get(user_id),
+    )
+
+    reply_text = result.get("reply", "")
+
+    # Update mirror HUD overlay to speaking
+    _voice_state["state"] = "speaking"
+    _voice_state["text"] = query
+    _voice_state["reply"] = reply_text
+
+    if speak_mirror and reply_text:
+        def on_finish():
+            _voice_state["state"] = "idle"
+            _voice_state["text"] = ""
+            _voice_state["reply"] = ""
+
+        VoiceConciergeService.play_on_mirror_async(
+            reply_text, user_id=user_id, on_finish=on_finish
+        )
+    else:
+        # Reset HUD to idle after 6 seconds if not playing audio
+        def _clear_hud():
+            time.sleep(6)
+            if _voice_state["reply"] == reply_text:
+                _voice_state["state"] = "idle"
+                _voice_state["text"] = ""
+                _voice_state["reply"] = ""
+        threading.Thread(target=_clear_hud, daemon=True).start()
+
+    return jsonify({
+        "status": "ok",
+        "query": query,
+        "reply": reply_text,
+        "action": result.get("action"),
+        "data": result.get("data"),
+        "source": result.get("source"),
+        "user_id": user_id,
+    })
+
+
+@app.route("/api/voice/context")
+def voice_context():
+    """
+    Returns the comprehensive real-time knowledge snapshot (user profile,
+    registered users, reminders, wardrobe, ESP32, vision, weather, calendar, settings).
+    """
+    user_id = request.args.get("user_id") or SettingsRepository.get("active_user", default="guest")
+    snapshot = VoiceBrain.get_knowledge_snapshot(
+        user_id=user_id,
+        esp32_data=_esp32_state,
+        stylist_data=_live_stylist_state.get(user_id),
+        grooming_data=_live_grooming_state.get(user_id),
+    )
+    return jsonify({"status": "ok", "context": snapshot})
 
 
 

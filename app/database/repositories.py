@@ -138,7 +138,8 @@ class WardrobeRepository:
     @staticmethod
     def update_item(item_id: int, **fields):
         allowed = {"name", "category", "color", "weather", "temperature_min",
-                    "temperature_max", "occasion", "image_filename", "active"}
+                    "temperature_max", "occasion", "image_filename", "active",
+                    "times_worn", "last_worn"}
         updates = {k: v for k, v in fields.items() if k in allowed}
         if not updates:
             return
