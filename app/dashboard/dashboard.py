@@ -599,22 +599,25 @@ def process_esp32_payload(data: dict) -> dict:
             SettingsRepository.set("privacy_mode", privacy_val)
             logger.info(f"ESP32 physical button changed privacy mode to: {privacy_val}")
 
-    # 3. Save telemetry data
+    # 3. Save telemetry data (preserving existing values when partial packets arrive)
     _esp32_state["device"] = data.get("device", "esp32")
     _esp32_state["status"] = data.get("status", "online")
-    _esp32_state["temperature"] = data.get("temperature")
-    _esp32_state["humidity"] = data.get("humidity")
-    _esp32_state["light"] = data.get("light")
-    motion_val = bool(data.get("motion", False))
-    _esp32_state["motion"] = motion_val
+    if "temperature" in data and data["temperature"] is not None:
+        _esp32_state["temperature"] = data["temperature"]
+    if "humidity" in data and data["humidity"] is not None:
+        _esp32_state["humidity"] = data["humidity"]
+    if "light" in data and data["light"] is not None:
+        _esp32_state["light"] = data["light"]
+    if "motion" in data:
+        motion_val = bool(data["motion"])
+        _esp32_state["motion"] = motion_val
+        if motion_val:
+            _last_motion_time = time.time()
+            # If camera has recently seen a registered user (within last 45s), greet them!
+            active_user = SettingsRepository.get("active_user", default="guest")
+            if active_user and active_user.lower() != "guest" and _last_camera_seen and (time.time() - _last_camera_seen) < 45:
+                _trigger_auto_greeting_if_eligible(active_user, trigger_source="motion_sensor")
     _esp32_state["last_seen"] = time.time()
-
-    if motion_val:
-        _last_motion_time = time.time()
-        # If camera has recently seen a registered user (within last 45s), greet them!
-        active_user = SettingsRepository.get("active_user", default="guest")
-        if active_user and active_user.lower() != "guest" and _last_camera_seen and (time.time() - _last_camera_seen) < 45:
-            _trigger_auto_greeting_if_eligible(active_user, trigger_source="motion_sensor")
 
     return _esp32_state
 

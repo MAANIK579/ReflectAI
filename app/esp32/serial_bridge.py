@@ -11,6 +11,7 @@ import glob
 import json
 import logging
 import os
+import re
 import threading
 import time
 from typing import Callable, Dict, Optional
@@ -137,7 +138,7 @@ class ESP32SerialBridge:
                             if not line:
                                 continue
 
-                            # Parse JSON packet from ESP32 (resilient to surrounding text)
+                            # 1. Parse JSON packet from ESP32 (resilient to surrounding text)
                             if "{" in line and "}" in line:
                                 start_idx = line.find("{")
                                 end_idx = line.rfind("}")
@@ -149,8 +150,56 @@ class ESP32SerialBridge:
                                             self.packets_received += 1
                                             self.last_packet_time = time.time()
                                             self.callback(payload)
+                                            continue
                                     except json.JSONDecodeError:
                                         pass
+
+                            # 2. Hybrid Fallback: Parse plain-text logs (if ESP32 still runs legacy firmware)
+                            # Matches DHT format: "Temp: 24.5 C | Hum: 50.0 %"
+                            dht_match = re.search(r"Temp:\s*([\d\.\-]+)\s*C\s*\|\s*Hum:\s*([\d\.\-]+)\s*%", line, re.IGNORECASE)
+                            if dht_match:
+                                try:
+                                    t = float(dht_match.group(1))
+                                    h = float(dht_match.group(2))
+                                    self.packets_received += 1
+                                    self.last_packet_time = time.time()
+                                    self.callback({
+                                        "device": "esp32",
+                                        "status": "online",
+                                        "temperature": t,
+                                        "humidity": h,
+                                    })
+                                    continue
+                                except ValueError:
+                                    pass
+
+                            # Matches physical button logs from legacy firmware
+                            up_line = line.upper()
+                            if "USER 1" in up_line and "SELECTED" in up_line:
+                                self.packets_received += 1
+                                self.last_packet_time = time.time()
+                                self.callback({"device": "esp32", "status": "online", "user": "User 1"})
+                            elif "USER 2" in up_line and "SELECTED" in up_line:
+                                self.packets_received += 1
+                                self.last_packet_time = time.time()
+                                self.callback({"device": "esp32", "status": "online", "user": "User 2"})
+                            elif "GUEST" in up_line and "SELECTED" in up_line:
+                                self.packets_received += 1
+                                self.last_packet_time = time.time()
+                                self.callback({"device": "esp32", "status": "online", "user": "Guest"})
+                            elif "PRIVACY MODE: ON" in up_line:
+                                self.packets_received += 1
+                                self.last_packet_time = time.time()
+                                self.callback({"device": "esp32", "status": "online", "privacy": True})
+                            elif "PRIVACY MODE: OFF" in up_line:
+                                self.packets_received += 1
+                                self.last_packet_time = time.time()
+                                self.callback({"device": "esp32", "status": "online", "privacy": False})
+                            elif any(k in line for k in ["REFLECTAI", "SYSTEM STATUS", "DHT22", "Entering main loop", "Wi-Fi Connected", "background reconnect"]):
+                                # Heartbeat activity indicating ESP32 is powered and communicating on serial
+                                self.packets_received += 1
+                                self.last_packet_time = time.time()
+                                self.callback({"device": "esp32", "status": "online"})
                         except (serial.SerialException, OSError) as read_err:
                             logger.warning(f"ESP32 Serial read error on {port}: {read_err}")
                             self.last_error = str(read_err)
