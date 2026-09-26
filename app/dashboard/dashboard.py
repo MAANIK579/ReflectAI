@@ -613,7 +613,11 @@ def process_esp32_payload(data: dict) -> dict:
         _esp32_state["motion"] = motion_val
         if motion_val:
             _last_motion_time = time.time()
-            # If camera has recently seen a registered user (within last 45s), greet them!
+            # 1. Wake camera face engine immediately to scan and identify person!
+            if _face_camera_service:
+                _face_camera_service.on_motion_detected()
+
+            # 2. If camera has recently seen a registered user (within last 45s), greet them!
             active_user = SettingsRepository.get("active_user", default="guest")
             if active_user and active_user.lower() != "guest" and _last_camera_seen and (time.time() - _last_camera_seen) < 45:
                 _trigger_auto_greeting_if_eligible(active_user, trigger_source="motion_sensor")
@@ -623,6 +627,7 @@ def process_esp32_payload(data: dict) -> dict:
 
 
 _esp32_serial_bridge = None
+_face_camera_service = None
 
 def start_esp32_serial_bridge():
     global _esp32_serial_bridge
@@ -637,9 +642,28 @@ def start_esp32_serial_bridge():
             logger.warning(f"Could not start ESP32 serial bridge: {e}")
 
 
+def start_face_camera_service():
+    global _face_camera_service
+    # When Flask debug reloader is active, avoid duplicate thread in supervisor process
+    if app.debug and os.environ.get("WERKZEUG_RUN_MAIN") != "true":
+        return
+    if _face_camera_service is None and not settings.CAMERA_MOCK_MODE:
+        try:
+            from face_engine import FaceRecognitionService
+            _face_camera_service = FaceRecognitionService(
+                show_preview=False,
+                api_host="127.0.0.1:5000",
+            )
+            _face_camera_service.start()
+            logger.info("✓ Motion-activated Face Recognition camera service started.")
+        except Exception as e:
+            logger.warning(f"Could not start FaceRecognitionService: {e}")
+
+
 @app.before_request
-def _ensure_serial_bridge_started():
+def _ensure_hardware_services_started():
     start_esp32_serial_bridge()
+    start_face_camera_service()
 
 
 @app.route("/api/esp32/state", methods=["POST"])
@@ -695,11 +719,18 @@ def status():
     else:
         esp32_status_str = "disconnected"
 
+    # Camera status
+    camera_diag = _face_camera_service.get_status() if _face_camera_service else None
     camera_online = (
         _last_camera_seen is not None and
         (now - _last_camera_seen) < 25
     )
-    if camera_online:
+
+    if _face_camera_service and _face_camera_service.running:
+        camera_online = True
+        camera_status_str = _face_camera_service.camera_status
+        camera_mock = False
+    elif camera_online:
         camera_status_str = "online"
         camera_mock = False
     elif settings.CAMERA_MOCK_MODE:
@@ -725,6 +756,7 @@ def status():
             "esp32_status": esp32_status_str,
             "camera_status": camera_status_str,
             "esp32_bridge": bridge_diag,
+            "camera_diag": camera_diag,
         },
     })
 
@@ -1218,8 +1250,10 @@ def api_reminders_delete(reminder_id):
 
 def run_dashboard(host: str = "0.0.0.0", port: int = 5000, debug: bool = False) -> None:
     start_esp32_serial_bridge()
+    start_face_camera_service()
     logger.info(f"Starting dashboard server on {host}:{port}")
     app.run(host=host, port=port, debug=debug)
+
 
 
 if __name__ == "__main__":

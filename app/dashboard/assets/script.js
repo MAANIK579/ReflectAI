@@ -244,11 +244,21 @@ async function updateStatus() {
       data.system.esp32_status === 'online' ? 'connected' : (data.system.esp32_mock_mode ? 'mock' : '')
     );
 
+    const camStatus = (data.system.camera_status || '').toLowerCase();
     cameraStatusEl.textContent = `Camera: ${data.system.camera_status}`;
-    cameraDotEl.className = 'status-dot ' + (
-      data.system.camera_status === 'online' ? 'connected' : (data.system.camera_mock_mode ? 'mock' : '')
-    );
+    let camDotClass = '';
+    if (camStatus.includes('recognized') || camStatus === 'online') {
+      camDotClass = 'connected';
+    } else if (camStatus.includes('scanning')) {
+      camDotClass = 'scanning';
+    } else if (camStatus.includes('standby')) {
+      camDotClass = 'standby';
+    } else if (data.system.camera_mock_mode) {
+      camDotClass = 'mock';
+    }
+    cameraDotEl.className = 'status-dot ' + camDotClass;
   } catch (err) {
+
     esp32StatusEl.textContent = 'ESP32: unavailable';
     cameraStatusEl.textContent = 'Camera: unavailable';
   }
