@@ -245,7 +245,7 @@ class VoiceConciergeService:
             return buf.getvalue()
         except Exception as e:
             logger.error(f"Exception during Piper synthesis: {e}")
-            return cls._create_wav_from_silence()
+            return cls._create_silent_wav()
 
     @classmethod
     def _create_silent_wav(cls, duration_sec: float = 0.5) -> bytes:

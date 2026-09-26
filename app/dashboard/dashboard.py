@@ -208,7 +208,7 @@ def _match_face_embedding(feat) -> tuple:
                     norm_q = np.linalg.norm(feat)
                     norm_r = np.linalg.norm(ref_emb)
                     if norm_q > 0 and norm_r > 0:
-                        score = float(np.dot(feat, ref_emb) / (norm_q * norm_r))
+                        score = float(np.dot(feat.flatten(), ref_emb.flatten()) / (norm_q * norm_r))
                     else:
                         score = 0.0
 
@@ -1249,6 +1249,7 @@ def api_reminders_delete(reminder_id):
 
 
 def run_dashboard(host: str = "0.0.0.0", port: int = 5000, debug: bool = False) -> None:
+    app.debug = debug  # Set debug flag before starting services to avoid double-init
     start_esp32_serial_bridge()
     start_face_camera_service()
     logger.info(f"Starting dashboard server on {host}:{port}")

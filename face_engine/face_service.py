@@ -76,36 +76,36 @@ def extract_body_crops(frame: np.ndarray, face_box: np.ndarray) -> Tuple[Optiona
         x, y, w_box, h_box = map(int, face_box[:4])
 
         # 1. Topwear (chin to waist)
-        torso_y1 = int(min(frame_h, max(0, y + int(h_box * 0.85))))
-        torso_y2 = int(min(frame_h, y + int(h_box * 3.3)))
+        torso_y1 = max(0, min(frame_h, y + int(h_box * 0.85)))
+        torso_y2 = max(0, min(frame_h, y + int(h_box * 3.3)))
         torso_cx = x + w_box / 2
         torso_half_w = (w_box * 2.4) / 2
-        torso_x1 = int(max(0, torso_cx - torso_half_w))
-        torso_x2 = int(min(frame_w, torso_cx + torso_half_w))
+        torso_x1 = max(0, min(frame_w, int(torso_cx - torso_half_w)))
+        torso_x2 = max(0, min(frame_w, int(torso_cx + torso_half_w)))
 
         torso_crop = None
         if torso_y2 > torso_y1 + 30 and torso_x2 > torso_x1 + 30:
             torso_crop = frame[torso_y1:torso_y2, torso_x1:torso_x2]
 
         # 2. Bottomwear (waist down towards legs/thighs)
-        legs_y1 = int(min(frame_h, y + int(h_box * 3.2)))
-        legs_y2 = int(min(frame_h, y + int(h_box * 7.5)))
+        legs_y1 = max(0, min(frame_h, y + int(h_box * 3.2)))
+        legs_y2 = max(0, min(frame_h, y + int(h_box * 7.5)))
         legs_cx = x + w_box / 2
         legs_half_w = (w_box * 2.2) / 2
-        legs_x1 = int(max(0, legs_cx - legs_half_w))
-        legs_x2 = int(min(frame_w, legs_cx + legs_half_w))
+        legs_x1 = max(0, min(frame_w, int(legs_cx - legs_half_w)))
+        legs_x2 = max(0, min(frame_w, int(legs_cx + legs_half_w)))
 
         legs_crop = None
         if legs_y2 > legs_y1 + 40 and legs_x2 > legs_x1 + 30:
             legs_crop = frame[legs_y1:legs_y2, legs_x1:legs_x2]
 
         # 3. Head & Face (for Grooming Classifier: hair, beard, skin)
-        head_y1 = int(max(0, y - int(h_box * 0.45)))
-        head_y2 = int(min(frame_h, y + int(h_box * 1.35)))
+        head_y1 = max(0, min(frame_h, y - int(h_box * 0.45)))
+        head_y2 = max(0, min(frame_h, y + int(h_box * 1.35)))
         head_cx = x + w_box / 2
         head_half_w = (w_box * 1.5) / 2
-        head_x1 = int(max(0, head_cx - head_half_w))
-        head_x2 = int(min(frame_w, head_cx + head_half_w))
+        head_x1 = max(0, min(frame_w, int(head_cx - head_half_w)))
+        head_x2 = max(0, min(frame_w, int(head_cx + head_half_w)))
 
         head_crop = None
         if head_y2 > head_y1 + 40 and head_x2 > head_x1 + 40:
@@ -152,6 +152,7 @@ class FaceRecognitionService:
         api_host: str = "localhost:5000",
         on_user_recognized: Optional[Callable[[str, str], None]] = None,
         on_user_lost: Optional[Callable[[], None]] = None,
+        enable_motion_standby: Optional[bool] = None,
     ):
         self.camera_index = camera_index
         self.detection_fps = detection_fps
@@ -164,14 +165,20 @@ class FaceRecognitionService:
         self.on_user_recognized = on_user_recognized
         self.on_user_lost = on_user_lost
 
+        if enable_motion_standby is not None:
+            self.enable_motion_standby = enable_motion_standby
+        else:
+            self.enable_motion_standby = os.getenv("ENABLE_MOTION_STANDBY", "1" if not show_preview else "0").lower() in ("1", "true", "yes")
+
         self.running = False
         self.thread: Optional[threading.Thread] = None
         self._motion_event = threading.Event()
-        self._motion_event.set()  # Start awake initially for 45s
+        self._motion_event.set()  # Start awake initially
 
         self.last_motion_time = time.time()
         self.is_motion_detected = True
         self.last_face_time = time.time()
+        self.last_active_user_seen_time = time.time()
         self.current_user = FALLBACK_USER_ID
         self.camera_status = "stopped"
         self.last_error: Optional[str] = None
@@ -198,6 +205,7 @@ class FaceRecognitionService:
     def on_motion_detected(self):
         """Called whenever the ESP32 PIR motion sensor detects motion."""
         self.last_motion_time = time.time()
+        self.is_motion_detected = True
         self._motion_event.set()
         if "standby" in self.camera_status:
             self.camera_status = "scanning for faces"
@@ -216,61 +224,102 @@ class FaceRecognitionService:
         }
 
     def _open_camera(self):
-        """Attempts to open USB webcam (OpenCV) with fallback to Picamera2."""
+        """Attempts to open USB webcam (OpenCV with DSHOW/V4L2 backends) with fallback to Picamera2."""
         logger.info(f"Opening camera (index {self.camera_index})...")
-        cap = cv2.VideoCapture(self.camera_index)
-        if cap.isOpened():
-            ret, frame = cap.read()
-            if ret and frame is not None:
-                return cap
-            cap.release()
 
-        # Try device index 0 if another was requested
+        def _try_open(idx: int):
+            try:
+                cap = cv2.VideoCapture(idx)
+                if cap.isOpened():
+                    ret, frame = cap.read()
+                    if ret and frame is not None:
+                        return cap
+                    cap.release()
+            except Exception:
+                pass
+
+            # Windows: try DirectShow backend
+            if sys.platform.startswith("win"):
+                try:
+                    cap = cv2.VideoCapture(idx, cv2.CAP_DSHOW)
+                    if cap.isOpened():
+                        ret, frame = cap.read()
+                        if ret and frame is not None:
+                            return cap
+                        cap.release()
+                except Exception:
+                    pass
+            # Linux: try V4L2 backend
+            elif sys.platform.startswith("linux"):
+                try:
+                    cap = cv2.VideoCapture(idx, cv2.CAP_V4L2)
+                    if cap.isOpened():
+                        ret, frame = cap.read()
+                        if ret and frame is not None:
+                            return cap
+                        cap.release()
+                except Exception:
+                    pass
+            return None
+
+        # Try requested camera index
+        cap = _try_open(self.camera_index)
+        if cap is not None:
+            return cap
+
+        # If requested was not 0, try default index 0
         if self.camera_index != 0:
-            cap = cv2.VideoCapture(0)
-            if cap.isOpened():
-                ret, frame = cap.read()
+            cap = _try_open(0)
+            if cap is not None:
+                return cap
+
+        # Fallback to Raspberry Pi Picamera2 (Linux / RPi only)
+        if sys.platform.startswith("linux"):
+            try:
+                from picamera2 import Picamera2
+                logger.info("Attempting connection via Raspberry Pi Picamera2...")
+
+                class PiCameraStream:
+                    def __init__(self, width=640, height=480):
+                        self.picam2 = Picamera2()
+                        config = self.picam2.create_preview_configuration(
+                            main={"size": (width, height), "format": "RGB888"}
+                        )
+                        self.picam2.configure(config)
+                        self.picam2.start()
+                        self._is_opened = True
+                        time.sleep(0.5)
+
+                    def read(self):
+                        try:
+                            if not self._is_opened:
+                                return False, None
+                            f = self.picam2.capture_array()
+                            if f is not None and f.size > 0:
+                                return True, cv2.cvtColor(f, cv2.COLOR_RGB2BGR)
+                        except Exception:
+                            pass
+                        return False, None
+
+                    def isOpened(self):
+                        return self._is_opened
+
+                    def release(self):
+                        self._is_opened = False
+                        try:
+                            self.picam2.stop()
+                            self.picam2.close()
+                        except Exception:
+                            pass
+
+                pi_cam = PiCameraStream(640, 480)
+                ret, frame = pi_cam.read()
                 if ret and frame is not None:
-                    return cap
-                cap.release()
-
-        # Fallback to Raspberry Pi Picamera2
-        try:
-            from picamera2 import Picamera2
-            logger.info("Attempting connection via Raspberry Pi Picamera2...")
-
-            class PiCameraStream:
-                def __init__(self, width=640, height=480):
-                    self.picam2 = Picamera2()
-                    config = self.picam2.create_preview_configuration(main={"size": (width, height), "format": "RGB888"})
-                    self.picam2.configure(config)
-                    self.picam2.start()
-                    time.sleep(0.5)
-
-                def read(self):
-                    f = self.picam2.capture_array()
-                    if f is not None:
-                        return True, cv2.cvtColor(f, cv2.COLOR_RGB2BGR)
-                    return False, None
-
-                def isOpened(self):
-                    return True
-
-                def release(self):
-                    try:
-                        self.picam2.stop()
-                        self.picam2.close()
-                    except Exception:
-                        pass
-
-            pi_cam = PiCameraStream(640, 480)
-            ret, frame = pi_cam.read()
-            if ret and frame is not None:
-                logger.info("Successfully connected to Raspberry Pi Camera via Picamera2!")
-                return pi_cam
-            pi_cam.release()
-        except Exception as e:
-            logger.debug(f"Picamera2 init failed: {e}")
+                    logger.info("Successfully connected to Raspberry Pi Camera via Picamera2!")
+                    return pi_cam
+                pi_cam.release()
+            except Exception as e:
+                logger.debug(f"Picamera2 init failed: {e}")
 
         return None
 
@@ -333,6 +382,7 @@ class FaceRecognitionService:
     def _run_loop(self):
         # Validate models
         if not os.path.exists(YUNET_MODEL) or not os.path.exists(SFACE_MODEL):
+            self.running = False
             self.camera_status = "model_missing"
             self.last_error = f"Models missing in {MODELS_DIR}. Run download_face_models.py."
             logger.error(self.last_error)
@@ -342,8 +392,18 @@ class FaceRecognitionService:
         self.profiles = load_profiles()
         logger.info(f"Loaded {len(self.registered)} registered faces: {list(self.registered.keys())}")
 
-        cap = self._open_camera()
+        # Open camera with up to 3 retries in case hardware is initializing
+        cap = None
+        for attempt in range(3):
+            if not self.running:
+                return
+            cap = self._open_camera()
+            if cap:
+                break
+            time.sleep(0.5)
+
         if not cap:
+            self.running = False
             self.camera_status = "no_camera"
             self.last_error = "No camera hardware detected (check USB or CSI cable)."
             logger.warning(f"[FaceService] {self.last_error}")
@@ -352,6 +412,7 @@ class FaceRecognitionService:
         # Get initial resolution
         ret, frame = cap.read()
         if not ret or frame is None:
+            self.running = False
             self.camera_status = "no_camera"
             cap.release()
             return
@@ -381,14 +442,18 @@ class FaceRecognitionService:
                 now = time.time()
 
                 # 1. Motion awareness check:
-                # If no motion has been sensed recently and current user is guest, enter low-power standby
-                motion_recent = (now - self.last_motion_time) < self.motion_timeout
-                if not motion_recent and self.current_user == FALLBACK_USER_ID:
-                    self.camera_status = "standby (waiting for motion)"
-                    self._motion_event.clear()
-                    # Wait up to 1.5s for motion trigger
-                    self._motion_event.wait(timeout=1.5)
-                    continue
+                # If motion standby is enabled, enter low-power sleep when room is idle
+                if self.enable_motion_standby:
+                    motion_recent = (now - self.last_motion_time) < self.motion_timeout
+                    if not motion_recent and self.current_user == FALLBACK_USER_ID:
+                        self.camera_status = "standby (waiting for motion)"
+                        self._motion_event.clear()
+                        # Wait up to 1.5s for motion trigger
+                        self._motion_event.wait(timeout=1.5)
+                        # Flush stale frames from camera buffer after waking up
+                        for _ in range(5):
+                            cap.grab()
+                        continue
 
                 self.camera_status = "scanning for faces" if self.current_user == FALLBACK_USER_ID else f"active: {self.current_user}"
 
@@ -435,10 +500,14 @@ class FaceRecognitionService:
                     user_switched = (self.current_user != candidate_user)
                     if candidate_count >= self.confirm_frames and user_switched:
                         self.current_user = candidate_user
+                        self.last_active_user_seen_time = now
                         profile_name = self.profiles.get(self.current_user, {}).get("name", self.current_user.title())
                         logger.info(f"✨ Face Recognized: {profile_name} (score={best_score:.3f}) — Loading user data!")
                         self.camera_status = f"recognized: {profile_name}"
                         self._notify_mirror(self.current_user, name=profile_name)
+
+                    if self.current_user == candidate_user:
+                        self.last_active_user_seen_time = now
 
                     if candidate_count >= self.confirm_frames and self.current_user != FALLBACK_USER_ID:
                         if user_switched or (now - last_clothing_check_time > 30):
@@ -449,26 +518,31 @@ class FaceRecognitionService:
                     candidate_user = None
                     candidate_count = 0
 
-                    # Revert to guest after timeout with no face
-                    if (now - self.last_face_time) > self.no_face_timeout and self.current_user != FALLBACK_USER_ID:
-                        logger.info(f"No face detected for {self.no_face_timeout}s — reverting mirror to Guest.")
+                    # Revert to guest after timeout if active user is absent
+                    if self.current_user != FALLBACK_USER_ID and (now - self.last_active_user_seen_time) > self.no_face_timeout:
+                        logger.info(f"Active user '{self.current_user}' absent for {self.no_face_timeout}s — reverting mirror to Guest.")
                         self.current_user = FALLBACK_USER_ID
                         self._notify_mirror(FALLBACK_USER_ID)
 
                 # Optional GUI Preview (CLI standalone mode)
                 if self.show_preview:
-                    display = frame.copy()
-                    if faces is not None and len(faces) > 0:
-                        face = sorted(faces, key=lambda f: f[2] * f[3], reverse=True)[0]
-                        x, y, w_box, h_box = map(int, face[:4])
-                        color = (0, 230, 115) if detected_user else (100, 100, 255)
-                        label = f"{detected_user.upper()} ({best_score:.2f})" if detected_user else "Unknown Face"
-                        cv2.rectangle(display, (x, y), (x + w_box, y + h_box), color, 2)
-                        cv2.putText(display, label, (x, max(20, y - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
-                    cv2.imshow("ReflectAI — Face Recognition", display)
-                    key = cv2.waitKey(1) & 0xFF
-                    if key in (27, ord("q"), ord("Q")):
-                        break
+                    try:
+                        display = frame.copy()
+                        if faces is not None and len(faces) > 0:
+                            face = sorted(faces, key=lambda f: f[2] * f[3], reverse=True)[0]
+                            x, y, w_box, h_box = map(int, face[:4])
+                            color = (0, 230, 115) if detected_user else (100, 100, 255)
+                            label = f"{detected_user.upper()} ({best_score:.2f})" if detected_user else "Unknown Face"
+                            cv2.rectangle(display, (x, y), (x + w_box, y + h_box), color, 2)
+                            cv2.putText(display, label, (x, max(20, y - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+                        cv2.imshow("ReflectAI — Face Recognition", display)
+                        key = cv2.waitKey(1) & 0xFF
+                        if key in (27, ord("q"), ord("Q")):
+                            self.running = False
+                            break
+                    except Exception as e:
+                        logger.warning(f"Preview display disabled: {e}")
+                        self.show_preview = False
 
                 # FPS Throttle
                 elapsed = time.time() - now
@@ -480,9 +554,17 @@ class FaceRecognitionService:
             logger.error(f"Error in face recognition loop: {e}")
             self.last_error = str(e)
         finally:
-            cap.release()
+            self.running = False
+            if cap:
+                try:
+                    cap.release()
+                except Exception:
+                    pass
             if self.show_preview:
-                cv2.destroyAllWindows()
+                try:
+                    cv2.destroyAllWindows()
+                except Exception:
+                    pass
             self._notify_mirror(FALLBACK_USER_ID)
             self.camera_status = "stopped"
             logger.info("Camera released cleanly.")
@@ -492,10 +574,13 @@ def main():
     print("=" * 60)
     print("    ReflectAI — Face Recognition Service (Motion-Aware)")
     print("=" * 60)
+    api_host = os.getenv("API_HOST", "localhost:5000")
     service = FaceRecognitionService(
         camera_index=int(os.getenv("CAMERA_INDEX", "0")),
         detection_fps=4,
         show_preview=os.getenv("SHOW_PREVIEW", "1").lower() in ("1", "true", "yes"),
+        api_host=api_host,
+        enable_motion_standby=os.getenv("ENABLE_MOTION_STANDBY", "0").lower() in ("1", "true", "yes"),
     )
     service.start()
 
@@ -503,7 +588,7 @@ def main():
     def _motion_sync_worker():
         while service.running:
             try:
-                r = requests.get("http://localhost:5000/api/status", timeout=1.5)
+                r = requests.get(f"http://{service.api_host}/api/status", timeout=1.5)
                 if r.status_code == 200:
                     data = r.json()
                     sensors = data.get("sensors", {})

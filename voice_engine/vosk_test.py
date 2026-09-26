@@ -19,7 +19,7 @@ SAMPLE_RATE = 16000
 q = queue.Queue()
 
 
-def audio_callback(indata, frames, time, status):
+def audio_callback(indata, frames, time_info, status):
     if status:
         print(status, file=sys.stderr)
     q.put(bytes(indata))

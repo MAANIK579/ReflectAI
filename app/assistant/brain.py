@@ -285,6 +285,10 @@ class VoiceBrain:
                     "action": "complete_reminder",
                     "data": matched,
                 }
+            return {
+                "reply": f"I couldn't find a pending reminder matching '{target}'.",
+                "action": "complete_reminder_not_found",
+            }
 
         # 1C. List Reminders
         if any(p in clean_q for p in ["what are my reminders", "list my reminders", "do i have any reminders", "my reminders", "show reminders", "what tasks do i have"]):
@@ -639,7 +643,7 @@ class VoiceBrain:
                     "data": grooming_data,
                 }
             return {
-                "reply": "Live grooming scan is currently ready. Stand centered in front of the camera.",
+                "reply": "Live grooming scan is not ready yet. Please stand centered in front of the camera.",
                 "action": "camera_grooming_none",
             }
 
@@ -655,7 +659,7 @@ class VoiceBrain:
                 high = w.get("high")
                 low = w.get("low")
                 if temp is not None:
-                    h_l = f" High of {high} and low of {low}." if high and low else ""
+                    h_l = f" High of {high} and low of {low}." if high is not None and low is not None else ""
                     return {
                         "reply": f"Right now in {city}, it's {int(round(float(temp)))} degrees and {cond.lower()}.{h_l}",
                         "action": "weather_query",
@@ -723,8 +727,8 @@ class VoiceBrain:
 
         # Wardrobe
         items = wardrobe.get("items", [])
-        top_names = [i["name"] for i in items if i.get("category") == "top"]
-        bot_names = [i["name"] for i in items if i.get("category") == "bottom"]
+        top_names = [i["name"] for i in items if i.get("category", "").lower() == "top"]
+        bot_names = [i["name"] for i in items if i.get("category", "").lower() == "bottom"]
         cats_str = ", ".join([f"{count} {cat}s" for cat, count in categories.items()]) or "0 items"
         facts.append(f"Wardrobe total: {wardrobe.get('total_items', 0)} items ({cats_str}).")
         if top_names:

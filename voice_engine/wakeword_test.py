@@ -26,7 +26,7 @@ print("Loading model...")
 print("Listening for wake word 'hey jarvis'... Ctrl+C to stop.")
 
 
-def audio_callback(indata, frames, time, status):
+def audio_callback(indata, frames, time_info, status):
     if status:
         print(status)
 

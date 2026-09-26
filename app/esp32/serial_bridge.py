@@ -14,7 +14,7 @@ import os
 import re
 import threading
 import time
-from typing import Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 logger = logging.getLogger("reflectai.esp32_serial")
 
@@ -56,7 +56,7 @@ class ESP32SerialBridge:
         self.running = False
         self.status = "stopped"
 
-    def get_diagnostics(self) -> Dict[str, any]:
+    def get_diagnostics(self) -> Dict[str, Any]:
         return {
             "has_pyserial": _HAS_PYSERIAL,
             "running": self.running,

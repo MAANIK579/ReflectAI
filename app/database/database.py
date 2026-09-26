@@ -81,11 +81,12 @@ CREATE TABLE IF NOT EXISTS clothing (
 CREATE TABLE IF NOT EXISTS outfits (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id TEXT,
-    top_id TEXT,
-    bottom_id TEXT,
-    footwear_id TEXT,
-    outerwear_id TEXT,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    top_id INTEGER,
+    bottom_id INTEGER,
+    footwear_id INTEGER,
+    outerwear_id INTEGER,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS outfit_log (
