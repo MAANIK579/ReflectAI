@@ -19,6 +19,7 @@ from flask import Flask, jsonify, render_template, request, send_from_directory,
 from app.assistant import VoiceConciergeService, VoiceBrain
 from app.calendar import CalendarService
 from app.config.settings import settings
+from app.esp32 import ESP32SerialBridge
 from app.database.repositories import (
     SettingsRepository, UserRepository, WardrobeRepository, OutfitLogRepository, ReminderRepository,
 )
@@ -557,29 +558,27 @@ def set_active_user():
     return jsonify({"status": "ok", "active_user": user_id, "greeted": greeted})
 
 
-@app.route("/api/esp32/state", methods=["POST"])
-def esp32_state():
+def process_esp32_payload(data: dict) -> dict:
     """
-    Receives JSON telemetry and physical button interactions from ESP32:
+    Processes incoming ESP32 telemetry packet (via USB Serial or Wi-Fi HTTP POST):
     - User selection button (User 1, User 2, Guest)
     - Privacy mode toggle
     - Sensors: DHT22 (temp, humidity), LDR (light), PIR (motion)
     """
     global _last_esp32_user, _last_esp32_privacy, _last_motion_time
-    data = request.get_json(force=True, silent=True) or {}
+    if not isinstance(data, dict):
+        return _esp32_state
 
     # 1. Update active user ONLY when an ESP32 physical button is actually pressed
-    # (i.e. on state transition, not on every background periodic sensor packet)
     raw_user = data.get("user")
     if raw_user:
         if _last_esp32_user is None:
             _last_esp32_user = raw_user
         elif raw_user != _last_esp32_user:
             _last_esp32_user = raw_user
-            # map "User 1" -> "user1", "User 2" -> "user2", "Guest" -> "guest"
             user_id = raw_user.strip().lower().replace(" ", "")
             if UserRepository.get(user_id) is None and user_id != "guest":
-                registered = UserRepository.get_all()
+                registered = UserRepository.list_all()
                 if user_id in ("user1", "1") and len(registered) > 0:
                     user_id = registered[0]["id"]
                 elif user_id in ("user2", "2") and len(registered) > 1:
@@ -617,13 +616,41 @@ def esp32_state():
         if active_user and active_user.lower() != "guest" and _last_camera_seen and (time.time() - _last_camera_seen) < 45:
             _trigger_auto_greeting_if_eligible(active_user, trigger_source="motion_sensor")
 
+    return _esp32_state
+
+
+_esp32_serial_bridge = None
+
+def start_esp32_serial_bridge():
+    global _esp32_serial_bridge
+    if _esp32_serial_bridge is None and not settings.ESP32_MOCK_MODE:
+        try:
+            _esp32_serial_bridge = ESP32SerialBridge(callback=process_esp32_payload)
+            _esp32_serial_bridge.start()
+        except Exception as e:
+            logger.warning(f"Could not start ESP32 serial bridge: {e}")
+
+
+@app.before_request
+def _ensure_serial_bridge_started():
+    start_esp32_serial_bridge()
+
+
+@app.route("/api/esp32/state", methods=["POST"])
+def esp32_state():
+    """
+    Receives JSON telemetry and physical button interactions from ESP32 over Wi-Fi HTTP POST.
+    """
+    data = request.get_json(force=True, silent=True) or {}
+    state = process_esp32_payload(data)
     current_active = SettingsRepository.get("active_user", default="guest")
     return jsonify({
         "status": "ok",
         "active_user": current_active,
         "message": "ESP32 state updated",
-        "data": _esp32_state
+        "data": state
     })
+
 
 
 @app.route("/api/status")
@@ -1167,6 +1194,7 @@ def api_reminders_delete(reminder_id):
 
 
 def run_dashboard(host: str = "0.0.0.0", port: int = 5000, debug: bool = False) -> None:
+    start_esp32_serial_bridge()
     logger.info(f"Starting dashboard server on {host}:{port}")
     app.run(host=host, port=port, debug=debug)
 

@@ -1,3 +1,4 @@
 python-dotenv
 Flask
 open_clip_torch
+pyserial

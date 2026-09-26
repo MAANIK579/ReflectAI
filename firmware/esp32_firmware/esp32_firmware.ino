@@ -27,19 +27,17 @@
 // =====================================================
 
 // =====================================================
-// WIFI / RASPBERRY PI CONFIGURATION
+// COMMUNICATION MODE
 // =====================================================
-const char* WIFI_SSID     = "Mithi papdi";
-const char* WIFI_PASSWORD = "9468665211";
+// Set to false for DIRECT MICRO-USB CABLE (Zero Wi-Fi required!)
+// Set to true only if you want wireless Wi-Fi HTTP POST
+#define ENABLE_WIFI false
 
-// Target Raspberry Pi / Dashboard Backend API
-// Update IP if your Pi or PC IP changes
-const char* PI_STATE_URL =
-  "http://192.168.173.9:5000/api/esp32/state";
-
-// Security shared token matching backend
-const char* PI_SHARED_TOKEN =
-  "KJwprEKT7YMu0WEYn0lcAJIZaNq0-m7tYr7Fx1vl9q8";
+// Target Raspberry Pi / Dashboard Backend API (Only used if ENABLE_WIFI is true)
+const char* WIFI_SSID       = "Mithi papdi";
+const char* WIFI_PASSWORD   = "9468665211";
+const char* PI_STATE_URL    = "http://192.168.173.9:5000/api/esp32/state";
+const char* PI_SHARED_TOKEN = "KJwprEKT7YMu0WEYn0lcAJIZaNq0-m7tYr7Fx1vl9q8";
 
 // =====================================================
 // PIN DEFINITIONS
@@ -129,6 +127,9 @@ void beep(unsigned int durationMs) {
 // WIFI CONNECTION
 // =====================================================
 void connectWiFi() {
+  if (!ENABLE_WIFI) {
+    return;
+  }
   if (WiFi.status() == WL_CONNECTED) {
     return;
   }
@@ -221,9 +222,11 @@ void updateOLED() {
   display.setCursor(0, 0);
   display.print("REFLECTAI");
 
-  // WiFi status indicator in header
+  // Connection status indicator in header
   display.setCursor(85, 0);
-  if (WiFi.status() == WL_CONNECTED) {
+  if (!ENABLE_WIFI) {
+    display.print("[USB]");
+  } else if (WiFi.status() == WL_CONNECTED) {
     display.print("[WiFi]");
   } else {
     display.print("[NoNet]");
@@ -291,21 +294,11 @@ void sendToPi(bool forceImmediate) {
     return;
   }
 
-  // If Pi was unreachable, apply 8s backoff so main loop never stutters
-  if (!forceImmediate && serverFailCount > 0 && (millis() - lastServerSend < 8000)) {
+  // If Pi was unreachable over Wi-Fi, apply 8s backoff so main loop never stutters
+  if (ENABLE_WIFI && !forceImmediate && serverFailCount > 0 && (millis() - lastServerSend < 8000)) {
     return;
   }
   lastServerSend = millis();
-
-  if (WiFi.status() != WL_CONNECTED) {
-    static unsigned long lastReconnectAttempt = 0;
-    if (millis() - lastReconnectAttempt > 8000) {
-      lastReconnectAttempt = millis();
-      Serial.println("[WiFi] Not connected. Attempting background reconnect...");
-      WiFi.reconnect();
-    }
-    return;
-  }
 
   String lightStatus = (lightState == HIGH) ? "bright" : "dark";
   bool sendMotion = (motionState == HIGH) || motionLatch;
@@ -334,39 +327,49 @@ void sendToPi(bool forceImmediate) {
   json += "\"privacy\":" + String(privacyMode ? "true" : "false");
   json += "}";
 
-  WiFiClient client;
-  HTTPClient http;
+  // ===================================================
+  // 1. ALWAYS SEND OVER MICRO-USB CABLE (Zero Wi-Fi Needed)
+  // ===================================================
+  Serial.println(json);
 
-  if (!http.begin(client, PI_STATE_URL)) {
-    Serial.println("[ERROR] Unable to begin HTTPClient to Pi");
-    return;
+  // ===================================================
+  // 2. OPTIONAL WI-FI HTTP POST (Only if ENABLE_WIFI is true)
+  // ===================================================
+  if (ENABLE_WIFI) {
+    if (WiFi.status() != WL_CONNECTED) {
+      static unsigned long lastReconnectAttempt = 0;
+      if (millis() - lastReconnectAttempt > 8000) {
+        lastReconnectAttempt = millis();
+        Serial.println("[WiFi] Not connected. Attempting background reconnect...");
+        WiFi.reconnect();
+      }
+      return;
+    }
+
+    WiFiClient client;
+    HTTPClient http;
+
+    if (!http.begin(client, PI_STATE_URL)) {
+      Serial.println("[ERROR] Unable to begin HTTPClient to Pi");
+      return;
+    }
+
+    http.setTimeout(2000); // 2 second timeout so loop never hangs
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("X-ReflectAI-Token", PI_SHARED_TOKEN);
+
+    int httpCode = http.POST(json);
+
+    if (httpCode > 0) {
+      serverFailCount = 0;
+      String response = http.getString();
+    } else {
+      serverFailCount++;
+    }
+
+    http.end();
+    client.stop(); // Cleanly close socket
   }
-
-  http.setTimeout(2000); // 2 second timeout so loop never hangs
-  http.addHeader("Content-Type", "application/json");
-  http.addHeader("X-ReflectAI-Token", PI_SHARED_TOKEN);
-
-  int httpCode = http.POST(json);
-
-  if (httpCode > 0) {
-    serverFailCount = 0;
-    Serial.print("HTTP ");
-    Serial.print(httpCode);
-    Serial.print(" -> ");
-    String response = http.getString();
-    Serial.println(response);
-  } else {
-    serverFailCount++;
-    Serial.print("[HTTP ERROR] code: ");
-    Serial.print(httpCode);
-    Serial.print(" (");
-    Serial.print(HTTPClient::errorToString(httpCode));
-    Serial.print("). Check Pi server at ");
-    Serial.println(PI_STATE_URL);
-  }
-
-  http.end();
-  client.stop(); // Cleanly close socket
 }
 
 // =====================================================
@@ -476,8 +479,12 @@ void setup() {
   display.display();
   delay(1000);
 
-  // Connect to Wi-Fi
-  connectWiFi();
+  // Connect to Wi-Fi only if enabled
+  if (ENABLE_WIFI) {
+    connectWiFi();
+  } else {
+    Serial.println("[MODE] Micro-USB Cable Mode Active (No Wi-Fi Needed)");
+  }
 
   beep();
   Serial.println("[READY] System initialized. Entering main loop.\n");
