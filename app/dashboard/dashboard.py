@@ -623,6 +623,9 @@ _esp32_serial_bridge = None
 
 def start_esp32_serial_bridge():
     global _esp32_serial_bridge
+    # When Flask debug reloader is active, avoid duplicate thread in supervisor process
+    if app.debug and os.environ.get("WERKZEUG_RUN_MAIN") != "true":
+        return
     if _esp32_serial_bridge is None and not settings.ESP32_MOCK_MODE:
         try:
             _esp32_serial_bridge = ESP32SerialBridge(callback=process_esp32_payload)
@@ -666,10 +669,26 @@ def status():
         _esp32_state["last_seen"] is not None and
         (now - _esp32_state["last_seen"]) < 15
     )
+    bridge_diag = _esp32_serial_bridge.get_diagnostics() if _esp32_serial_bridge else None
+
     if esp32_online:
         esp32_status_str = "online"
     elif settings.ESP32_MOCK_MODE:
         esp32_status_str = "mock mode"
+    elif bridge_diag:
+        b_status = bridge_diag.get("status")
+        if b_status == "permission_denied":
+            esp32_status_str = "permission denied (dialout)"
+        elif b_status == "port_busy":
+            esp32_status_str = "port busy"
+        elif b_status == "pyserial_missing":
+            esp32_status_str = "pyserial missing"
+        elif b_status == "no_port_found":
+            esp32_status_str = "no usb port found"
+        elif b_status == "connected":
+            esp32_status_str = "connected (waiting data)"
+        else:
+            esp32_status_str = "disconnected"
     else:
         esp32_status_str = "disconnected"
 
@@ -702,6 +721,7 @@ def status():
             "camera_mock_mode": camera_mock,
             "esp32_status": esp32_status_str,
             "camera_status": camera_status_str,
+            "esp32_bridge": bridge_diag,
         },
     })
 

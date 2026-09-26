@@ -7,9 +7,14 @@ window for now — kiosk mode (auto-launching fullscreen on boot) is a
 Phase 12 concern, once real hardware is involved.
 """
 
+import os
 from app.main import bootstrap
 from app.dashboard.dashboard import run_dashboard
 
 if __name__ == "__main__":
     bootstrap()
-    run_dashboard(debug=True)
+    # Default to False on Raspberry Pi / production so Werkzeug reloader doesn't
+    # fork processes and lock hardware serial ports (/dev/ttyUSB*).
+    debug_mode = os.getenv("FLASK_DEBUG", "false").strip().lower() in ("1", "true", "yes")
+    run_dashboard(debug=debug_mode)
+

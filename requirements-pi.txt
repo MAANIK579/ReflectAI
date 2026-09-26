@@ -4,4 +4,6 @@
 # Pi-only packages installed.
 -r requirements.txt
 -r voice_engine/requirements.txt
+pyserial
 piper-tts
+
